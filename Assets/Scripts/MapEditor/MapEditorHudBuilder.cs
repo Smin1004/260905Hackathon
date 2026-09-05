@@ -10,7 +10,7 @@ using UnityEngine.UI;
 /// 맵 에디터 HUD 프리팹 생성기 (에디터 전용 — 릴리즈 빌드에 포함되지 않음. Docs/201 6장 규칙상 Editor 폴더 대신 #if UNITY_EDITOR).
 /// 메뉴 [Chojiilgwan > Build MapEditor HUD]:
 ///   1. Assets/image 스프라이트 임포트 설정 (Single · 9-slice 보더 · 타일 Repeat · PPU)
-///   2. Assets/UI/MapEditorTheme.asset 생성 (없을 때만 — 색은 인스펙터에서 바꾼다)
+///   2. Assets/Resources/UI/MapEditorTheme.asset 생성 (없을 때만 — 색은 인스펙터에서 바꾼다)
 ///   3. Assets/Prefabs/UI/MapEditorHud.prefab 생성/덮어쓰기
 ///   4. MapEditor 씬에 인스턴스가 없으면 배치 후 저장
 /// 프리팹을 인스펙터에서 손본 뒤 다시 실행하면 덮어써지므로, 레이아웃을 바꾸려면 이 파일의 수치를 고치는 편이 안전하다.
@@ -19,7 +19,7 @@ using UnityEngine.UI;
 public static class MapEditorHudBuilder
 {
     const string ImgRoot = "Assets/image/";
-    const string ThemePath = "Assets/UI/MapEditorTheme.asset";
+    const string ThemePath = "Assets/Resources/UI/MapEditorTheme.asset";   // Resources — 빌드에서도 로드
     const string PrefabPath = "Assets/Prefabs/UI/MapEditorHud.prefab";
     const string ScenePath = "Assets/Scenes/MapEditor.unity";
 
@@ -140,12 +140,14 @@ public static class MapEditorHudBuilder
 
     static MapEditorTheme EnsureTheme()
     {
-        EnsureFolder("Assets/UI");
+        EnsureFolder("Assets/Resources");
+        EnsureFolder("Assets/Resources/UI");
         var t = AssetDatabase.LoadAssetAtPath<MapEditorTheme>(ThemePath);
         bool created = t == null;
         if (created) { t = ScriptableObject.CreateInstance<MapEditorTheme>(); AssetDatabase.CreateAsset(t, ThemePath); }
         // 스프라이트 참조는 매번 갱신 (색은 사용자가 바꿨을 수 있으니 생성 시에만 기본값)
         t.PaperDotsTile = S("tiles/tile_paper_dots");
+        t.BgDotsTile = S("tiles/tile_bg_dots");
         t.StartMarker = S("markers/marker_start");
         t.StartPulse = S("markers/marker_pulse_start");
         t.GoalMarker = S("markers/marker_goal");

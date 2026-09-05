@@ -35,6 +35,7 @@ public class PlayBootstrap : MonoBehaviour
         cam.clearFlags = CameraClearFlags.SolidColor;
         PlayHud.Theme.Load();
         cam.backgroundColor = PlayHud.Theme.Background;   // 에디터 HUD 와 같은 배경색 (MapEditorTheme.Background)
+        RuntimeUI.BackdropCanvas(cam, gameObject);         // 에디터와 같은 도트 배경 (월드 뒤, 정렬 −100)
         CanvasView.FitCamera(cam, 0.14f, 0.06f);   // 상단 HUD 바(183px)·하단 조작 안내를 비워 둔다
     }
 

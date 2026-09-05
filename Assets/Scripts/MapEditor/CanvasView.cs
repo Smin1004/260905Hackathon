@@ -156,7 +156,7 @@ public class CanvasView : MonoBehaviour
         if (map.HasStart) _startMarker.position = new Vector3(map.StartPos.x, map.StartPos.y, 0f);
     }
 
-    static void Marker(Transform parent, Sprite sprite, float diameter, int order)
+    public static void Marker(Transform parent, Sprite sprite, float diameter, int order)
     {
         if (sprite == null) return;
         var go = new GameObject(sprite.name);

@@ -83,6 +83,28 @@ public static class RuntimeSprites
         }
     }
 
+    static Sprite _circle;
+    /// <summary>1u 지름 흰색 원 스프라이트 (절차 생성, 64px).</summary>
+    public static Sprite Circle
+    {
+        get
+        {
+            if (_circle == null)
+            {
+                const int size = 64;
+                var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+                var px = new Color[size * size];
+                var c = new Vector2(size * 0.5f, size * 0.5f); float r = size * 0.5f - 1f;
+                for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++)
+                        px[y * size + x] = new Color(1f, 1f, 1f, Mathf.Clamp01(r - Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), c) + 0.5f));
+                tex.SetPixels(px); tex.Apply();
+                _circle = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            }
+            return _circle;
+        }
+    }
+
     public static SpriteRenderer MakeSquare(string name, Transform parent, Vector2 pos, Vector2 size, Color color, int sortingOrder)
     {
         var go = new GameObject(name);

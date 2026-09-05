@@ -25,6 +25,7 @@ MonoBehaviour:
   BoundaryColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
   BoundaryWidth: 0.25
   PaperDotsTile: {fileID: 21300000, guid: a577a79377c219941a9af39f5ad47b3d, type: 3}
+  BgDotsTile: {fileID: 21300000, guid: 48c78b24e13a30f45b56eab9cde4ff9c, type: 3}
   StartMarker: {fileID: 21300000, guid: 5779fdcfe5ffa8443833f71563190f20, type: 3}
   StartPulse: {fileID: 21300000, guid: 4cb0237152af2444595ee2dc558b39cb, type: 3}
   GoalMarker: {fileID: 21300000, guid: ba11f76b05a1d7940826f7a858f8ffd6, type: 3}

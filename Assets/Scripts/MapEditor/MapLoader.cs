@@ -100,13 +100,29 @@ public class MapLoader : MonoBehaviour, ILoadableMap
 
     void BuildGoalObject(Vector2 pos)
     {
-        var sr = RuntimeSprites.MakeSquare("Goal", _root, pos, MapConstants.GoalSize, GoalColor, 5);
-        var go = sr.gameObject;
+        // 시작 마커와 같은 원형 (테마 GoalPulse + GoalMarker). 테마가 없으면 절차 생성 원 (QA: 네모 → 동그라미)
+        var go = new GameObject("Goal");
+        go.transform.SetParent(_root, false);
+        go.transform.position = new Vector3(pos.x, pos.y, 0f);
+        var theme = MapEditorTheme.LoadOrNull();
+        if (theme != null && theme.GoalMarker != null)
+        {
+            CanvasView.Marker(go.transform, theme.GoalPulse, theme.PulseSize, 4);
+            CanvasView.Marker(go.transform, theme.GoalMarker, theme.MarkerSize, 5);
+        }
+        else
+        {
+            var vis = new GameObject("Circle");
+            vis.transform.SetParent(go.transform, false);
+            vis.transform.localScale = new Vector3(MapConstants.GoalSize.x, MapConstants.GoalSize.y, 1f);
+            var sr = vis.AddComponent<SpriteRenderer>();
+            sr.sprite = RuntimeSprites.Circle; sr.color = GoalColor; sr.sortingOrder = 5;
+        }
         if (BuildColliders)
         {
-            var box = go.AddComponent<BoxCollider2D>();
-            box.isTrigger = true;
-            box.size = Vector2.one;   // 스케일이 GoalSize 이므로 로컬 1×1
+            var circle = go.AddComponent<CircleCollider2D>();
+            circle.isTrigger = true;
+            circle.radius = MapConstants.GoalSize.x * 0.5f;
         }
         Goal = go.AddComponent<GoalZone>();
     }

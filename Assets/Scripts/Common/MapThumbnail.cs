@@ -12,8 +12,8 @@ public static class MapThumbnail
     // 플레이스홀더 색 — 에디터 CanvasView 의 단색 플레이스홀더와 같은 값. 테마 도입 시 여기만 바꾸거나 호출 전에 덮어쓴다.
     public static Color BackgroundColor = new Color(0.96f, 0.96f, 0.94f);
     public static Color BoundaryColor = new Color(0.25f, 0.25f, 0.3f);
-    public static Color StartColor = new Color(0.2f, 0.75f, 0.35f, 0.9f);
-    public static Color GoalColor = new Color(1f, 0.85f, 0.2f, 0.85f);
+    public static Color StartColor = new Color32(0, 191, 165, 255);   // 테마 Mint
+    public static Color GoalColor = new Color32(247, 95, 76, 255);    // 테마 Warning(코랄)
     /// <summary>바닥·왼쪽 벽 굵기 (u) — MapEditorTheme.BoundaryWidth 기본값과 동일.</summary>
     public static float BoundaryWidth = 0.25f;
     /// <summary>선이 축소돼도 최소 이 픽셀 반지름은 유지 (얇은 선이 사라지지 않게).</summary>
@@ -59,9 +59,9 @@ public static class MapThumbnail
         }
 
         // 시작점 (에디터 마커와 같은 크기 0.8×0.9), 골 (GoalSize)
-        raster.Rect(startPos, new Vector2(0.8f, 0.9f), StartColor);
+        raster.Line(startPos, startPos, 1.2f, StartColor);   // 원형 마커 (MarkerSize 1.2u)
         if (map != null && map.HasGoal)
-            raster.Rect(map.GoalPos, MapConstants.GoalSize, GoalColor);
+            raster.Line(map.GoalPos, map.GoalPos, 1.2f, GoalColor);
 
         var tex = new Texture2D(width, height, TextureFormat.RGBA32, false)
         {
