@@ -1,11 +1,10 @@
 using System;
 using UnityEngine;
 
-/// <summary>방 설정 4종 — Docs/100 7.1, Docs/205 3장 세션 프로퍼티와 1:1.</summary>
+/// <summary>방 설정 5종 — Docs/100 7.1, Docs/205 3장 세션 프로퍼티와 1:1. (패타임은 모드가 아니라 항상 빼는 기준선 — Docs/206 2장)</summary>
 [Serializable]
 public class RoomSettings
 {
-    public bool ParTimeMode = false;
     /// <summary>0 = 무한 / 3 / 5</summary>
     public int AttemptLimit = 0;
     /// <summary>초. 120 / 300 / 600</summary>

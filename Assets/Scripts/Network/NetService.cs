@@ -398,7 +398,6 @@ public class NetService : MonoBehaviour
             w.WriteValueSafe(host);
             if (host)
             {
-                w.WriteValueSafe(Settings.ParTimeMode);
                 w.WriteValueSafe(Settings.AttemptLimit);
                 w.WriteValueSafe(Settings.DrawTimeLimit);
                 w.WriteValueSafe(Settings.PlayTimeLimit);
@@ -549,7 +548,6 @@ public class NetService : MonoBehaviour
         var s = new RoomSettings();
         if (fromHost)
         {
-            reader.ReadValueSafe(out s.ParTimeMode);
             reader.ReadValueSafe(out s.AttemptLimit);
             reader.ReadValueSafe(out s.DrawTimeLimit);
             reader.ReadValueSafe(out s.PlayTimeLimit);

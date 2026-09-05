@@ -75,8 +75,9 @@ public static class VowCatalog
 
     // ------------------------------------------------------------------ 점수 계수 (Docs/206 2.5, 초지일관 = 뜻을 끝까지 유지)
 
-    /// <summary>뜻 난이도 계수 — 클리어 시간에 곱한다. Tier 1 ×1.00 / 2 ×0.93 / 3 ×0.85</summary>
-    public static float TierCoefficient(int tier) => tier <= 1 ? 1.00f : (tier == 2 ? 0.93f : 0.85f);
+    /// <summary>뜻 난이도 계수 — 클리어 시간에 곱한다. Tier 1 ×1.00 / 2 ×0.97 / 3 ×0.94
+    /// (패타임 빼기 방식에서는 상대의 검증 시간이 이미 내 뜻의 난이도를 흡수하므로 이중 보상을 피해 작게 둔다 — 핵심 보상은 일관성 계수)</summary>
+    public static float TierCoefficient(int tier) => tier <= 1 ? 1.00f : (tier == 2 ? 0.97f : 0.94f);
 
     /// <summary>선택한 뜻들의 난이도 계수 곱</summary>
     public static float TierMultiplier(IList<VowId> ids)

@@ -48,7 +48,7 @@ class MatchData {
     VowId OpponentVow;      // 상대 뜻
     MapData MyMap;          // 내가 만든 맵 (검증 완료본)
     MapData OpponentMap;    // 상대가 만든 맵
-    RoomSettings Settings;  // 방 설정 6종 (100_game_design.md 7.1)
+    RoomSettings Settings;  // 방 설정 5종 (100_game_design.md 7.1)
     string MyNickname;      // 내 닉네임 (Lobby 입력, 기본값 "플레이어N")
     string OpponentNickname;
     float MyParTime;        // 내 맵의 검증 기록(패타임)
@@ -81,7 +81,6 @@ class PlayerRecord {
 
 // 방 설정 — 205_network.md의 세션 프로퍼티와 1:1 대응
 class RoomSettings {
-    bool ParTimeMode;       // 기본 false
     int AttemptLimit;       // 무한(0) / 3 / 5
     int DrawTimeLimit;      // 초 단위 120 / 300 / 600, 기본 300
     int PlayTimeLimit;      // 초 단위 120 / 180 / 300, 기본 180 — 검증·교환 플레이 공용

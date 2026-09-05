@@ -43,10 +43,9 @@
 | 역할 | 방장 = NGO Host, 참가자 = NGO Client. 메시지는 항상 Host↔Client 1:1 |
 | 동기화 | 방 설정은 **세션 프로퍼티**로 저장 — 참가자가 세션에 들어오면 즉시 읽을 수 있음 |
 
-### 방 설정 6종 (`100_game_design.md` 7.1과 1:1 — `RoomSettings`)
+### 방 설정 5종 (`100_game_design.md` 7.1과 1:1 — `RoomSettings`)
 
 ```
-ParTimeMode       : bool  (기본 false)
 AttemptLimit      : int   0 | 3 | 5        (0=무한)
 DrawTimeLimit     : int   120 | 300 | 600  (초, 기본 300)
 PlayTimeLimit     : int   120 | 180 | 300  (초, 기본 180 — 검증·교환 공용)
@@ -88,7 +87,7 @@ Lobby → WaitingOpponent → VowSelect → MapEdit → WaitingSubmit → Exchan
 
 | 메시지명 | 페이로드 (쓰는 순서) | 방향 | 전달 방식 |
 |---|---|---|---|
-| `CJ_Hello` | `nickname`(string, ≤16자), `isHost`(bool), **호스트만** 방 설정 6종 `ParTimeMode`(bool)·`AttemptLimit`(int)·`DrawTimeLimit`(int)·`PlayTimeLimit`(int)·`VowPickCount`(int)·`VowCandidateCount`(int), `ack`(bool — 상대 Hello 를 이미 받았음) | 양방향 — 상대 Hello 를 받을 때까지 1초마다 재전송 (8장) | ReliableSequenced |
+| `CJ_Hello` | `nickname`(string, ≤16자), `isHost`(bool), **호스트만** 방 설정 5종 `AttemptLimit`(int)·`DrawTimeLimit`(int)·`PlayTimeLimit`(int)·`VowPickCount`(int)·`VowCandidateCount`(int), `ack`(bool — 상대 Hello 를 이미 받았음) | 양방향 — 상대 Hello 를 받을 때까지 1초마다 재전송 (8장) | ReliableSequenced |
 | `CJ_Vows` | `count`(int), `vowId`(int) × count | 양방향 — 각자 뜻 확정 시 | ReliableSequenced |
 | `CJ_MapMeta` | `parTime`(float), `totalBytes`(int), `chunkCount`(int) — 맵 전송 시작 (패타임은 여기에 실려 별도 메시지 없음) | 각자 → 상대 | ReliableSequenced |
 | `CJ_MapChunk` | `index`(int), `count`(int), `length`(int), `bytes`(≤4KB) — `MapSerializer.Serialize(map)` 결과(양자화 바이너리+GZip)를 `MapChunker.Split`으로 4KB 분할 | 각자 → 상대 | **ReliableFragmentedSequenced** |
@@ -159,7 +158,7 @@ class NetService : MonoBehaviour {                      // 구현: Scripts/Netwo
 
 | 파일 | 역할 |
 |---|---|
-| `Scripts/Network/NetService.cs` | 6장 래퍼 구현. `Init`(익명 로그인, 인스턴스별 프로필) → `CreateRoom`/`JoinRoom`(Sessions + Relay, SDK 가 NGO Host/Client 자동 시작) → NGO 시작 대기 후 이름 붙은 메시지 핸들러 등록. 메시지: `CJ_Hello`(닉네임 + 호스트→클라 방 설정 6종: 패타임 모드·시도·그리기·플레이 시간·뜻 개수·후보 수), `CJ_Vows`(뜻 ID 목록 — 양쪽 확정 시 교환), `CJ_MapMeta`(패타임·크기·청크 수), `CJ_MapChunk`(4KB, ReliableFragmentedSequenced), `CJ_PlayResult`, `CJ_NextRound`, `CJ_SubmitFailed`(그리기 시간 초과 → 그 라운드 패배). 끊김은 NGO 연결 해제 콜백 + 세션 이벤트 → `MatchAborted` 1회 |
+| `Scripts/Network/NetService.cs` | 6장 래퍼 구현. `Init`(익명 로그인, 인스턴스별 프로필) → `CreateRoom`/`JoinRoom`(Sessions + Relay, SDK 가 NGO Host/Client 자동 시작) → NGO 시작 대기 후 이름 붙은 메시지 핸들러 등록. 메시지: `CJ_Hello`(닉네임 + 호스트→클라 방 설정 5종: 패타임 모드·시도·그리기·플레이 시간·뜻 개수·후보 수), `CJ_Vows`(뜻 ID 목록 — 양쪽 확정 시 교환), `CJ_MapMeta`(패타임·크기·청크 수), `CJ_MapChunk`(4KB, ReliableFragmentedSequenced), `CJ_PlayResult`, `CJ_NextRound`, `CJ_SubmitFailed`(그리기 시간 초과 → 그 라운드 패배). 끊김은 NGO 연결 해제 콜백 + 세션 이벤트 → `MatchAborted` 1회 |
 | `Scripts/Boot/GameFlow.cs` | 4장 FSM. Boot 씬 상주(DontDestroyOnLoad). 로비 UI(닉네임·방 만들기·코드 참가) → Hello 교환 시 MapEditor 애디티브 로드 → 에디터 `Completed` 구독 → 잠금 + `SendMap` → 내 제출 ∧ 상대 맵 수신 시 MapEditor 언로드·Play 로드 → `PlayBootstrap.Finished` 로 결과 전송 → 양쪽 결과 시 `Ranking` 판정 결과 화면. **결과 화면 [다음 라운드]**: 양쪽이 누르면(`CJ_NextRound`) 같은 방에서 MapEdit 부터 반복 — 방을 새로 만들지 않는다. **[방 나가기]**는 에디터 우상단 바·로비 대기·결과 화면에 있으며 제자리 초기화로 로비 복귀(씬 재로드·싱글턴 파괴 없음). 끊김 → "매치 무효" 화면, 호스트는 [같은 방에서 새 상대 기다리기] 가능 |
 | `Scripts/Play/PlayBootstrap.cs` | Play 씬 진입점. `MatchData.OpponentMap` 으로 `PlaySession`(교환 모드: 시간·시도 제한, ESC=기권) 실행. 상대 맵이 없으면 데모 맵 (단독 실행 가능) |
 | `Scripts/Common/Ranking.cs` | 206 계산식 순수 함수 (`EffectiveTime`, `Score`, `Judge`) |
@@ -177,7 +176,7 @@ class NetService : MonoBehaviour {                      // 구현: Scripts/Netwo
 
 - [x] 팀 대표 커밋 후 다른 팀원 PC에서 추가 설정 없이 `Init()` 성공 (프로젝트 연결 공유 확인) — 빌드 클라이언트에서 확인
 - [x] 방 생성 → 코드 표시 → 코드 참가 → 2인 접속 확인 (에디터 호스트 + 개발 빌드 클라이언트)
-- [ ] Hello 로 전달된 참가자 `RoomSettings` 6종 값이 호스트와 일치
+- [ ] Hello 로 전달된 참가자 `RoomSettings` 5종 값이 호스트와 일치
 - [ ] `MapData` 청크 분할 전송 왕복 무손실 (60스트로크 × 300점 상한 맵으로)
 - [x] 상태 전환 전부 양방향 동기화 되는지 (한쪽만 빠른 경우 처리) — 자동 파일럿 2 프로세스로 Lobby→Result 전 구간 통과
 - [x] 참가자 강제 종료 / 방장 강제 종료 각각 → 상대 화면이 결과(무효)로 전환 — 양방향 확인. 호스트는 같은 방에서 새 상대 수용 확인

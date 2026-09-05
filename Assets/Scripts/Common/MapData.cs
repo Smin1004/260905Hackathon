@@ -33,7 +33,7 @@ public static class MapConstants
     public static readonly Vector2 StartPos = new Vector2(1.5f, 0.65f);
     /// <summary>골 존 트리거 크기.</summary>
     public static readonly Vector2 GoalSize = new Vector2(1f, 1f);
-    /// <summary>골은 시작점에서 최소 이 거리만큼 떨어져야 한다 (패타임 모드에서 0.2초짜리 맵 방지 — Docs/100 7.2 논의).</summary>
+    /// <summary>골은 시작점에서 최소 이 거리만큼 떨어져야 한다 (패타임 0.2초짜리 날림 맵 방지 — Docs/100 7.2).</summary>
     public const float MinGoalDistanceFromStart = 3f;
 
     public const int MaxUndo = 50;

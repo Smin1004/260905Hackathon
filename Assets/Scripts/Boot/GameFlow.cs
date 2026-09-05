@@ -545,15 +545,36 @@ public class GameFlow : MonoBehaviour
         return $"전적  {_data.MyNickname} <b>{_myRoundWins}</b> : <b>{_theirRoundWins}</b> {_data.OpponentNickname}{draws}";
     }
 
-    /// <summary>라운드 점수 표시. 점수 = 계수 적용 최종 시간(낮을수록 좋음), 패타임 모드면 시간 ÷ 패타임 비율</summary>
-    void SetScoreText(float myScore, float theirScore, bool parMode)
+    /// <summary>
+    /// 라운드 점수 표시 (Docs/206 2장 패타임 빼기). 윗줄: 식을 작게 / 가운데: 최종 마진을 크게 / 아랫줄: 전적.
+    /// 마진 = 클리어 시간 × 뜻 계수 − 상대 검증 시간(패타임). 낮을수록 좋고 음수면 제작자보다 빨랐다는 뜻.
+    /// </summary>
+    void SetScoreText(float myMult, float theirMult)
     {
         if (_scoreText == null) return;
-        string unit = parMode ? "" : "s";
-        string label = parMode ? "점수 (시간 ÷ 패타임, 낮을수록 좋음)" : "점수 (계수 적용 시간, 낮을수록 좋음)";
-        string me = myScore <= theirScore ? $"<color=#8CFFA6>{myScore:0.00}{unit}</color>" : $"{myScore:0.00}{unit}";
-        string them = theirScore < myScore ? $"<color=#8CFFA6>{theirScore:0.00}{unit}</color>" : $"{theirScore:0.00}{unit}";
-        _scoreText.text = $"<size=22>{label}</size>\n{_data.MyNickname} {me}   vs   {them} {_data.OpponentNickname}\n<size=26>{TallyText()}</size>";
+        var s = _data.Settings;
+        bool myClear = Ranking.IsCleared(_data.MyResult), theirClear = Ranking.IsCleared(_data.OpponentResult);
+        float my = Ranking.Score(_data.MyResult, _data.OpponentParTime, s, myMult);
+        float their = Ranking.Score(_data.OpponentResult, _data.MyParTime, s, theirMult);
+
+        string myFormula = myClear
+            ? $"{_data.MyResult.ClearTime:0.00}s × {myMult:0.00} − 검증 {_data.OpponentParTime:0.00}s"
+            : $"미클리어 (시도 {(_data.MyResult != null ? _data.MyResult.AttemptsUsed : 0)})";
+        string theirFormula = theirClear
+            ? $"{_data.OpponentResult.ClearTime:0.00}s × {theirMult:0.00} − 검증 {_data.MyParTime:0.00}s"
+            : $"미클리어 (시도 {(_data.OpponentResult != null ? _data.OpponentResult.AttemptsUsed : 0)})";
+
+        bool myBetter = myClear && (!theirClear || my <= their);
+        bool theirBetter = theirClear && (!myClear || their < my);
+        string myBig = myClear ? Ranking.MarginText(my) : "미클리어";
+        string theirBig = theirClear ? Ranking.MarginText(their) : "미클리어";
+        if (myBetter) myBig = $"<color=#8CFFA6>{myBig}</color>";
+        if (theirBetter) theirBig = $"<color=#8CFFA6>{theirBig}</color>";
+
+        _scoreText.text =
+            $"<size=18><color=#B8C0CC>{_data.MyNickname}: {myFormula}     |     {_data.OpponentNickname}: {theirFormula}</color></size>\n" +
+            $"<size=52>{myBig}   <size=30>vs</size>   {theirBig}</size>\n" +
+            $"<size=22>{TallyText()}   <color=#8A93A3>· 패타임 대비 마진, 낮을수록 좋음</color></size>";
     }
 
     void OnMyMapCompleted(MapData map, byte[] payload)
@@ -635,9 +656,7 @@ public class GameFlow : MonoBehaviour
         var outcome = Ranking.Judge(_data.MyResult, _data.OpponentParTime, _data.OpponentResult, _data.MyParTime, s, myMult, theirMult);
         _resultTitle.text = Ranking.OutcomeText(outcome);
         ApplyTally(outcome);
-        float myScore = Ranking.Score(_data.MyResult, _data.OpponentParTime, s, myMult);
-        float theirScore = Ranking.Score(_data.OpponentResult, _data.MyParTime, s, theirMult);
-        SetScoreText(myScore, theirScore, s.ParTimeMode);
+        SetScoreText(myMult, theirMult);
         string vowLine =
             $"\n\n뜻 계수 — 나: 난이도 ×{VowCatalog.TierMultiplier(_data.MyVows):0.00} · 연속 {myStreak}라운드 ×{VowCatalog.ConsistencyCoefficient(myStreak):0.00} → 최종 {Ranking.AdjustedTime(_data.MyResult, s, myMult):0.00}s" +
             $"   |   상대: 난이도 ×{VowCatalog.TierMultiplier(_data.OpponentVows):0.00} · 연속 {theirStreak}라운드 ×{VowCatalog.ConsistencyCoefficient(theirStreak):0.00} → 최종 {Ranking.AdjustedTime(_data.OpponentResult, s, theirMult):0.00}s";
@@ -651,13 +670,9 @@ public class GameFlow : MonoBehaviour
             $"<b>{_data.OpponentNickname}</b>가 만든 맵 · 패타임 {_data.OpponentParTime:0.00}s\n{_data.MyNickname} (나)의 기록: {Ranking.RecordText(_data.MyResult, s)}");
         _thumbRow.SetActive(_data.MyMap != null || _data.OpponentMap != null);
 
-        string par = s.ParTimeMode
-            ? $"\n패타임 모드: 내 점수 {Ranking.Score(_data.MyResult, _data.OpponentParTime, s, myMult):0.00}  /  상대 점수 {Ranking.Score(_data.OpponentResult, _data.MyParTime, s, theirMult):0.00}"
-            : "";
-        par = vowLine + par;
         _resultBody.text =
             $"라운드 {Round}\n" +
-            $"{_data.MyNickname} (나) 뜻: {VowCatalog.NamesOf(_data.MyVows)}   |   {_data.OpponentNickname} 뜻: {VowCatalog.NamesOf(_data.OpponentVows)}" + par;
+            $"{_data.MyNickname} (나) 뜻: {VowCatalog.NamesOf(_data.MyVows)}   |   {_data.OpponentNickname} 뜻: {VowCatalog.NamesOf(_data.OpponentVows)}" + vowLine;
         _nextRoundBtn.gameObject.SetActive(true);
         _nextRoundBtn.interactable = true;
         _nextRoundBtn.GetComponentInChildren<Text>().text = "다음 라운드 (같은 방)";
@@ -799,18 +814,18 @@ public class GameFlow : MonoBehaviour
         _resultPanel = RuntimeUI.Panel(root, Vector2.zero, Vector2.one, new Color(0.10f, 0.11f, 0.14f)).gameObject;
         var rp = _resultPanel.transform;
         _resultTitle = RuntimeUI.Label(rp, new Vector2(0f, 0.82f), new Vector2(1f, 0.96f), "", 88, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
-        _scoreText = RuntimeUI.Label(rp, new Vector2(0.05f, 0.72f), new Vector2(0.95f, 0.82f), "", 32, TextAnchor.MiddleCenter, new Color(0.55f, 1f, 0.65f), FontStyle.Bold);
+        _scoreText = RuntimeUI.Label(rp, new Vector2(0.03f, 0.66f), new Vector2(0.97f, 0.82f), "", 32, TextAnchor.MiddleCenter, new Color(0.92f, 0.94f, 0.98f), FontStyle.Bold);
         _scoreText.supportRichText = true;
 
         // 양쪽 맵 썸네일 (왼쪽: 내가 만든 맵 / 오른쪽: 상대가 만든 맵). 정상 결과(ShowResult)에서만 채우고 켠다.
         // Result(·다음 라운드 대기) 상태를 벗어나면(다음 라운드 시작·방 나가기·무효) 텍스처를 정리하고 숨긴다
-        _thumbRow = RuntimeUI.Rect("MapThumbnails", rp, new Vector2(0.06f, 0.44f), new Vector2(0.94f, 0.71f), 0f).gameObject;
+        _thumbRow = RuntimeUI.Rect("MapThumbnails", rp, new Vector2(0.06f, 0.42f), new Vector2(0.94f, 0.65f), 0f).gameObject;
         _myMapImage = BuildResultThumb(_thumbRow.transform, new Vector2(0.00f, 0f), new Vector2(0.49f, 1f), out _myMapCaption);
         _oppMapImage = BuildResultThumb(_thumbRow.transform, new Vector2(0.51f, 0f), new Vector2(1.00f, 1f), out _oppMapCaption);
         _thumbRow.SetActive(false);
         StateChanged += st => { if (st != MatchState.Result && st != MatchState.WaitingNextRound) ClearResultThumbnails(); };   // [다음 라운드] 대기 중에는 유지
 
-        _resultBody = RuntimeUI.Label(rp, new Vector2(0.08f, 0.30f), new Vector2(0.92f, 0.43f), "", 22, TextAnchor.MiddleCenter, new Color(0.9f, 0.9f, 0.95f));
+        _resultBody = RuntimeUI.Label(rp, new Vector2(0.08f, 0.29f), new Vector2(0.92f, 0.41f), "", 22, TextAnchor.MiddleCenter, new Color(0.9f, 0.9f, 0.95f));
         _nextRoundBtn = RuntimeUI.Button(rp, new Vector2(0.20f, 0.18f), new Vector2(0.48f, 0.28f), "다음 라운드 (같은 방)", RequestNextRound, new Color(0.20f, 0.65f, 0.40f), 28);
         _waitNewBtn = RuntimeUI.Button(rp, new Vector2(0.20f, 0.18f), new Vector2(0.48f, 0.28f), "같은 방에서 새 상대 기다리기", WaitForNewOpponent, new Color(0.25f, 0.55f, 0.95f), 24);
         _resultLeaveBtn = RuntimeUI.Button(rp, new Vector2(0.52f, 0.18f), new Vector2(0.80f, 0.28f), "방 나가기", LeaveRoom, new Color(0.6f, 0.3f, 0.3f), 28);
