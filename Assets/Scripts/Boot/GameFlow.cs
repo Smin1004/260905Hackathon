@@ -154,6 +154,7 @@ public class GameFlow : MonoBehaviour
     public async void CreateRoom()
     {
         if (_busy || _leaving || State != MatchState.Lobby) return;
+        if (!HasNickname) { SetLobbyStatus("닉네임을 입력하세요."); return; }
         try
         {
             _busy = true; SetLobbyButtons(false);
@@ -179,6 +180,8 @@ public class GameFlow : MonoBehaviour
     public async void JoinRoom(string code)
     {
         if (_busy || _leaving || State != MatchState.Lobby) return;
+        if (!HasNickname) { SetLobbyStatus("닉네임을 입력하세요."); return; }
+        if (string.IsNullOrWhiteSpace(code)) { SetLobbyStatus("방 코드를 입력하세요."); return; }
         try
         {
             _busy = true; SetLobbyButtons(false);
@@ -798,22 +801,31 @@ public class GameFlow : MonoBehaviour
         // ---- 로비
         _lobbyPanel = RuntimeUI.Panel(root, Vector2.zero, Vector2.one, new Color(0.10f, 0.11f, 0.14f)).gameObject;
         var lp = _lobbyPanel.transform;
-        RuntimeUI.Label(lp, new Vector2(0f, 0.84f), new Vector2(1f, 0.96f), "초지일관", 64, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
-        RuntimeUI.Label(lp, new Vector2(0f, 0.78f), new Vector2(1f, 0.85f), "스스로 걸은 뜻을 지킨 채, 상대가 그린 맵을 클리어하라", 24, TextAnchor.MiddleCenter, new Color(0.8f, 0.8f, 0.85f));
+        RuntimeUI.Label(lp, new Vector2(0f, 0.80f), new Vector2(1f, 0.94f), "초지일관", 84, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+        RuntimeUI.Label(lp, new Vector2(0f, 0.74f), new Vector2(1f, 0.80f), "스스로 걸은 뜻을 지킨 채, 상대가 그린 맵을 클리어하라", 24, TextAnchor.MiddleCenter, new Color(0.8f, 0.8f, 0.85f));
 
-        RuntimeUI.Label(lp, new Vector2(0.30f, 0.66f), new Vector2(0.40f, 0.72f), "닉네임", 24, TextAnchor.MiddleRight, Color.gray);
-        _nickInput = RuntimeUI.Input(lp, new Vector2(0.41f, 0.655f), new Vector2(0.70f, 0.725f), "플레이어");
+        // 카드 (방 화면의 패널과 같은 색) — 닉네임(필수) → 방 만들기 → 코드 참가
+        var card = RuntimeUI.Panel(lp, new Vector2(0.33f, 0.28f), new Vector2(0.67f, 0.70f), new Color(0.14f, 0.16f, 0.21f));
+        RuntimeUI.Label(card, new Vector2(0.08f, 0.86f), new Vector2(0.60f, 0.95f), "닉네임", 20, TextAnchor.MiddleLeft, Color.gray);
+        _lobbyNickHint = RuntimeUI.Label(card, new Vector2(0.40f, 0.86f), new Vector2(0.92f, 0.95f), "필수 — 입력해야 방을 만들거나 참가할 수 있습니다", 16, TextAnchor.MiddleRight, new Color(0.97f, 0.37f, 0.30f));
+        _nickInput = RuntimeUI.Input(card, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.85f), "닉네임 (최대 12자)");
         _nickInput.characterLimit = 12;
+        _nickInput.onValueChanged.AddListener(_ => RefreshLobbyButtons());
 
-        _createBtn = RuntimeUI.Button(lp, new Vector2(0.30f, 0.54f), new Vector2(0.70f, 0.62f), "방 만들기", CreateRoom, new Color(0.25f, 0.55f, 0.95f), 30);
-        _codeInput = RuntimeUI.Input(lp, new Vector2(0.30f, 0.44f), new Vector2(0.55f, 0.51f), "방 코드 6자리");
+        _createBtn = RuntimeUI.Button(card, new Vector2(0.08f, 0.50f), new Vector2(0.92f, 0.64f), "방 만들기", CreateRoom, new Color(0.25f, 0.55f, 0.95f), 30);
+
+        RuntimeUI.Label(card, new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.46f), "또는 코드로 참가", 18, TextAnchor.MiddleCenter, Color.gray);
+        _codeInput = RuntimeUI.Input(card, new Vector2(0.08f, 0.22f), new Vector2(0.60f, 0.36f), "방 코드 6자리");
         _codeInput.characterLimit = 8;
-        _joinBtn = RuntimeUI.Button(lp, new Vector2(0.56f, 0.44f), new Vector2(0.70f, 0.51f), "참가", () => JoinRoom(_codeInput.text), new Color(0.20f, 0.65f, 0.40f), 26);
+        _codeInput.onValueChanged.AddListener(_ => RefreshLobbyButtons());
+        _joinBtn = RuntimeUI.Button(card, new Vector2(0.62f, 0.22f), new Vector2(0.92f, 0.36f), "참가", () => JoinRoom(_codeInput.text.Trim().ToUpperInvariant()), new Color(0.20f, 0.65f, 0.40f), 26);
+        _lobbyHint = RuntimeUI.Label(card, new Vector2(0.08f, 0.06f), new Vector2(0.92f, 0.18f), "", 16, TextAnchor.MiddleCenter, new Color(0.75f, 0.78f, 0.85f));
         _createBtn.interactable = false; _joinBtn.interactable = false;
 
         _roomCodeText = null;   // 방 코드는 방 화면(_roomPanel)에서 표시
-        _lobbyStatus = RuntimeUI.Label(lp, new Vector2(0.1f, 0.26f), new Vector2(0.9f, 0.38f), "Unity Services 초기화 중...", 24, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.55f));
+        _lobbyStatus = RuntimeUI.Label(lp, new Vector2(0.1f, 0.18f), new Vector2(0.9f, 0.26f), "Unity Services 초기화 중...", 22, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.55f));
         _lobbyLeaveBtn = null;
+        RefreshLobbyButtons();
 
         BuildRoomPanel(root);
 
@@ -1036,7 +1048,26 @@ public class GameFlow : MonoBehaviour
     void SetLobbyStatus(string s) { if (_lobbyStatus != null) _lobbyStatus.text = s; }
     void SetWaitText(string s) { if (_waitText != null) _waitText.text = s; }
     void SetResultHint(string s) { if (_resultHint != null) _resultHint.text = s; }
-    void SetLobbyButtons(bool on) { _createBtn.interactable = on && NetReady; _joinBtn.interactable = on && NetReady; }
+    bool _lobbyButtonsOn = true;
+    Text _lobbyNickHint, _lobbyHint;
+
+    /// <summary>입력창에 닉네임이 있는가 (AutoPilot 처럼 코드로 Nickname 을 넣은 경우도 인정)</summary>
+    bool HasNickname => (_nickInput != null && !string.IsNullOrWhiteSpace(_nickInput.text)) || (!string.IsNullOrWhiteSpace(Nickname) && Nickname != "플레이어");
+    bool HasRoomCode => _codeInput != null && _codeInput.text.Trim().Length >= 4;
+
+    void SetLobbyButtons(bool on) { _lobbyButtonsOn = on; RefreshLobbyButtons(); }
+
+    /// <summary>닉네임 미입력 시 방 만들기·참가 불가, 코드 미입력 시 참가 불가. 안내 문구도 함께 갱신.</summary>
+    void RefreshLobbyButtons()
+    {
+        if (_createBtn == null || _joinBtn == null) return;
+        bool nick = HasNickname;
+        _createBtn.interactable = _lobbyButtonsOn && NetReady && nick;
+        _joinBtn.interactable = _lobbyButtonsOn && NetReady && nick && HasRoomCode;
+        if (_lobbyNickHint != null) _lobbyNickHint.gameObject.SetActive(!nick);
+        if (_lobbyHint != null)
+            _lobbyHint.text = !NetReady ? "네트워크 준비 중..." : !nick ? "닉네임을 먼저 입력하세요" : !HasRoomCode ? "방을 새로 만들거나, 받은 방 코드를 입력해 참가하세요" : "";
+    }
 
     /// <summary>방 생성·참가 뒤에는 입력 위젯(닉네임·방 만들기·코드·참가)을 숨기고 방 코드와 상태만 남긴다.</summary>
     void SetLobbyInputsVisible(bool visible)
