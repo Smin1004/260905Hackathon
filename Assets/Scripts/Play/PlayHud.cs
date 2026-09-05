@@ -8,7 +8,8 @@ using UnityEngine.UI;
 /// 구성 (기준 해상도 1920×1080, 상단 바 183px 는 에디터 HUD 의 TopBarH 와 동일)
 ///  - 좌상단: 라운드 배지(badge_round_blank) + 모드 필(검증 플레이 = 초록 / 교환 플레이 = 코랄) + 부제(상대 뜻 / 상대 닉네임의 맵)
 ///  - 중앙 상단: 뜻 표시 칩(VowCatalog.HudLine) + 시도 표시
-///  - 우상단: 남은 시간 링(에디터 타이머와 같은 패널·링 스프라이트) + 기권/에디터 복귀 버튼 (GameFlow 방 나가기 버튼은 검증 중 숨겨진다)
+///  - 우상단: 시간 링(에디터 타이머와 같은 패널·링 스프라이트) + 기권/에디터 복귀 버튼 (GameFlow 방 나가기 버튼은 검증 중 숨겨진다)
+///            검증 플레이 = 에디터의 남은 그리기 시간(수정 마감이 검증 중에도 흐르므로), 교환 플레이 = 남은 플레이 시간
 ///  - 하단: 조작 안내 (작게)
 ///  - 연출: 클리어 시 결과 카드 팝 + 화면 플래시 / 사망 시 붉은 비네트 + 카메라 흔들림 / 남은 10초 이하 경고색 + 초 단위 틱 소리
 ///
@@ -337,7 +338,7 @@ public class PlayHud : MonoBehaviour
         string esc = exchange ? "ESC 기권" : "ESC 에디터로";
         _hintText.text = "이동 A/D · ←/→     점프 W · ↑     빠른 낙하 S · ↓     R 리스폰     " + esc;
 
-        _timerLabel.text = _session.TimeLimit > 0f ? "남은 시간" : "경과 시간";
+        _timerLabel.text = exchange ? (_session.TimeLimit > 0f ? "남은 시간" : "경과 시간") : "남은 수정 시간";
         if (_abortLabel != null) _abortLabel.text = _session.AbortLabel;
     }
 
@@ -354,15 +355,27 @@ public class PlayHud : MonoBehaviour
         _attemptsText.text = tries + "   ·   R 리스폰";
         _attemptsText.color = _session.AttemptLimit > 0 && _session.Attempts >= _session.AttemptLimit ? Theme.Warning : Theme.TextMuted;
 
-        // 타이머
-        float limit = _session.TimeLimit;
-        float shown = limit > 0f ? Mathf.Max(0f, limit - _session.Elapsed) : _session.Elapsed;
-        int sec = limit > 0f ? Mathf.CeilToInt(shown) : Mathf.FloorToInt(shown);
+        // 타이머 — 검증 플레이: 에디터의 남은 그리기 시간 (검증 중에도 그리기 마감은 계속 흐른다) / 교환 플레이: 남은 플레이 시간
+        float limit, shown;
+        bool countdown;
+        if (_session.AbortMeansGiveUp)
+        {
+            limit = _session.TimeLimit;
+            countdown = limit > 0f;
+            shown = countdown ? Mathf.Max(0f, limit - _session.Elapsed) : _session.Elapsed;
+        }
+        else
+        {
+            limit = DrawTimeLimit();
+            countdown = limit > 0f;
+            shown = DrawTimeRemaining(limit);
+        }
+        int sec = countdown ? Mathf.CeilToInt(shown) : Mathf.FloorToInt(shown);
         _timerNumber.text = sec.ToString();
         _timerRemaining.text = string.Format("{0}:{1:00}", sec / 60, sec % 60);
-        _ringFill.fillAmount = limit > 0f ? Mathf.Clamp01(shown / limit) : 1f;
+        _ringFill.fillAmount = countdown ? Mathf.Clamp01(shown / limit) : 1f;
 
-        bool warn = limit > 0f && shown <= WarningSeconds && !_session.IsFinished;
+        bool warn = countdown && shown <= WarningSeconds && !_session.IsFinished;
         if (warn != _warning)
         {
             _warning = warn;
@@ -383,6 +396,20 @@ public class PlayHud : MonoBehaviour
             }
         }
         else if (_timerNumber.rectTransform.localScale != Vector3.one) _timerNumber.rectTransform.localScale = Vector3.one;
+    }
+
+    /// <summary>그리기 제한 시간 (방 설정). 0 = 제한 없음.</summary>
+    static float DrawTimeLimit() => Mathf.Max(0f, MatchData.Instance.Settings.DrawTimeLimit);
+
+    /// <summary>
+    /// 에디터 HUD(MapEditorHud.UpdateTimer)와 같은 시계: 멀티 매치에서는 GameFlow 의 그리기 마감, 단독 실행 시에는 씬 로드 기준 로컬 시계.
+    /// (MapEditorHud 는 Bind 시각을 기준으로 재지만 단독 실행에서는 씬 시작과 같으므로 timeSinceLevelLoad 로 대신한다)
+    /// </summary>
+    static float DrawTimeRemaining(float limit)
+    {
+        var flow = GameFlow.Instance;
+        if (flow != null && flow.DrawTimeRemaining >= 0f) return flow.DrawTimeRemaining;
+        return limit > 0f ? Mathf.Max(0f, limit - Time.timeSinceLevelLoad) : 0f;
     }
 
     /// <summary>AbortLabel 이 바뀐 뒤 (PlayBootstrap 이 Begin 후에 바꾼다).</summary>

@@ -120,7 +120,7 @@ Play 씬은 하나이며, 모드 파라미터로 두 가지로 동작:
 | `Scripts/Play/PlaySession.cs` | 플레이 1회 세션(씬 무관): `MapLoader`로 맵 로드(콜라이더 포함) → 플레이어 스폰 → 타이머 → R 리스폰(시도 +1) → 경계 밖(y<-3, x<-3, x>33) 자동 리스폰(시도 미소모) → `GoalZone.Reached` 시 `Completed(PlayResult)`. ESC/버튼 → `Aborted`. HUD 런타임 생성 |
 | 검증 모드 | MapEditor 씬 안에서 `MapEditorController.StartVerification()`이 PlaySession 을 띄운다 (3장의 "검증 모드"). 골 도달 시 클리어 시간이 패타임으로 `MatchData.MyParTime`에 기록되고 2.5초 후 에디터 복귀. 맵을 수정하면 검증 무효 → 재검증 |
 | 교환 플레이 모드 | `Scripts/Play/PlayBootstrap.cs` — Play 씬에서 `PlaySession.Begin(MatchData.OpponentMap, ...)` 으로 같은 세션을 쓴다 (시간·시도 제한, 기권) |
-| `Scripts/Play/PlayHud.cs` | 플레이 HUD (Docs/204 2.3). 검증·교환 공용, 에디터 HUD 와 같은 테마·패널 스프라이트: 좌상단 라운드/모드 배지, 중앙 뜻(`VowCatalog.HudLine`)·시도, 우상단 남은 시간 링 + 기권/복귀 버튼, 하단 조작 안내. 연출: 클리어 팝+플래시, 사망 비네트+카메라 흔들림, 10초 이하 경고색+틱음. PlaySession 은 생성·갱신 호출만 한다 |
+| `Scripts/Play/PlayHud.cs` | 플레이 HUD (Docs/204 2.3). 검증·교환 공용, 에디터 HUD 와 같은 테마·패널 스프라이트: 좌상단 라운드/모드 배지, 중앙 뜻(`VowCatalog.HudLine`)·시도, 우상단 시간 링(검증 = 에디터의 남은 그리기 시간, 교환 = 남은 플레이 시간) + 기권/복귀 버튼, 하단 조작 안내. 연출: 클리어 팝+플래시, 사망 비네트+카메라 흔들림, 10초 이하 경고색+틱음. PlaySession 은 생성·갱신 호출만 한다 |
 
 미구현: 뜻(제약) 필터 체인, 플레이 시간 제한·시도 제한 판정, 추적 카메라(현재는 맵 전체 고정 시야), 스프라이트 애니메이션.
 
