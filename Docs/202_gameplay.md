@@ -65,7 +65,7 @@ static class VowCatalog { List<VowDef> All; RandomCandidates(count); Apply(ids, 
 | 고무공 | `AlwaysBounceFactor` 0.6 — 착지 스텝에 `_pendingBounce = 낙하속도×0.6/JumpSpeed` (초록 바운스와 같은 경로) |
 | 달 걷기 | `RiseGravity`/`FallGravity` ×0.5, `JumpSpeed` ×0.71 |
 | 튕기는 몸 | `WallBounceSpeed` 7 — `OnCollisionEnter2D` 옆면 노멀(|n.x|≥0.7) 접촉 시 반대 방향 속도 + 0.18s 수평 조작 잠금 |
-| 투명 인간 | `Translucent` — 매 프레임 알파 0.10~0.35 |
+| 투명 인간 | `Translucent` — 보임 1.2s ↔ 숨음 1.0s 상태 전환(`GhostHidden`), 숨음 진입 시 그 시간 동안 알파 0 유지, 전환 페이드 0.15s |
 
 - 적용 시점: **검증 모드 = 상대 뜻**(`MatchData.OpponentVows`), **교환 플레이 모드 = 자기 뜻**(`MatchData.MyVows`) — 아래 3장
 - 카운터형 상태(점프 횟수·쿨다운)는 컨트롤러가 리스폰 시 초기화

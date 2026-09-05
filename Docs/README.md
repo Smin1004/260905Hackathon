@@ -52,6 +52,7 @@
 
 | 날짜 | 변경 |
 |---|---|
+| 2026-09-06 | 투명 인간: 사인파 깜빡임 → **보임 1.2s ↔ 숨음 1.0s 상태 전환**(숨음 진입 시 약 1초 완전히 사라진 채 유지, 페이드 0.15s) — `PlayerController.GhostVisibleTime/GhostHiddenTime` (100 4.1, 202 2장) |
 | 2026-09-06 | **제목 확정 「뜻밖의난관」** (홈 화면·productName·CLAUDE.md·README·SUMMARY). WebGL 닉네임 입력의 브라우저 prompt 방식 폐기 → 키보드 직접 입력 (`WebPrompt.cs` 삭제, 204 2.1) |
 | 2026-09-06 | **공통 룩** (204 3장): 모든 화면 배경 네이비 + 도트(`RuntimeUI.Backdrop/BackdropCanvas`, 테마 `BgDotsTile`), 모든 상자 둥근 모서리(`RuntimeUI.RoundedRect` — 패널 24/버튼 16/입력 12px), 골 존을 시작 마커와 같은 원형(테마 GoalPulse+GoalMarker, `CircleCollider2D`)으로, 썸네일 시작·골도 원. `MapEditorTheme.asset` → `Resources/UI/` (빌드에서도 마커·배경 로드) |
 | 2026-09-06 | **노랑·하늘 = 컨베이어** (101 1장): 노랑 → 오른쪽 3u/s, 하늘 ← 왼쪽 3u/s — `SurfaceModifier.ConveyorSpeed`, `PlayerController` 지상 이동에 접선 가산, `MapLoader.ColorBehaviours.ConveyorSpeed`. 스와치 라벨 갱신. 하늘색 은폐 구역 안은 폐기 |

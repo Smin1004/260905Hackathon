@@ -96,7 +96,7 @@ public static class VowCatalog
         new VowDef { Id = VowId.WallBounce, Name = "튕기는 몸", Tier = 2, Description = "벽에 닿으면 반대로 밀려납니다. 벽에 붙어 서 있을 수 없습니다.",
             Apply = c => c.Player.WallBounceSpeed = 7f },
 
-        new VowDef { Id = VowId.Ghost, Name = "투명 인간", Tier = 2, Description = "캐릭터가 반투명하게 깜빡여 위치를 읽기 어렵습니다.",
+        new VowDef { Id = VowId.Ghost, Name = "투명 인간", Tier = 2, Description = "캐릭터가 1초씩 완전히 사라졌다 나타나기를 반복합니다.",
             Apply = c => c.Player.Translucent = true },
     };
 

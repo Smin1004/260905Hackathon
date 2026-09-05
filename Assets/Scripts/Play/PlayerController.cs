@@ -32,7 +32,15 @@ public class PlayerController : MonoBehaviour
     [Tooltip("true 면 바라보는 방향으로 항상 달린다. 좌우 키는 방향 전환만 (뜻: 쉬지 않는 발)")] public bool AutoRun = false;
     [Tooltip("0 보다 크면 모든 착지에서 낙하 속도 × 이 값으로 다시 튕긴다. 낙하 3u/s 미만이면 멈춤 (뜻: 고무공)")] public float AlwaysBounceFactor = 0f;
     [Tooltip("0 보다 크면 벽(옆면)에 닿을 때 이 속도로 반대로 밀려난다 (뜻: 튕기는 몸)")] public float WallBounceSpeed = 0f;
-    [Tooltip("true 면 캐릭터가 반투명하게 깜빡인다 (뜻: 투명 인간)")] public bool Translucent = false;
+    [Tooltip("true 면 캐릭터가 주기적으로 완전히 사라진다 (뜻: 투명 인간) — 보임 GhostVisibleTime → 숨음 GhostHiddenTime 반복")] public bool Translucent = false;
+    [Tooltip("투명 인간: 보이는 구간 길이(초)")] public float GhostVisibleTime = 1.2f;
+    [Tooltip("투명 인간: 사라진 구간 길이(초) — 진입하면 이 시간 동안 유지")] public float GhostHiddenTime = 1.0f;
+    [Tooltip("투명 인간: 보이는 구간의 알파 (완전 불투명은 아님)")] public float GhostVisibleAlpha = 0.6f;
+    [Tooltip("투명 인간: 사라지고 나타나는 페이드 시간(초)")] public float GhostFadeTime = 0.15f;
+    /// <summary>투명 인간: 지금 사라진 구간인가 (디버그·테스트용)</summary>
+    public bool GhostHidden { get; private set; }
+    /// <summary>투명 인간: 현재 구간에 들어온 뒤 지난 시간(초)</summary>
+    public float GhostPhaseTime { get; private set; }
 
     [Header("점프")]
     public float JumpSpeed = 10f;                 // 최대 높이 ≈ 2.5u (상승 중력 2.0 기준)
@@ -559,6 +567,7 @@ public class PlayerController : MonoBehaviour
         _bouncing = false; _pendingBounce = 0f; SetGroundCollider(null);
         _lastFallSpeed = 0f; _wasGrounded = false;
         _autoDir = 1; _wallBounceLock = 0f;
+        GhostHidden = false; GhostPhaseTime = 0f;
         _squash = Vector2.one; _squashTimer = 0f;
         ApplyVisualTransform(Vector2.one);
         if (_visualSr != null) _visualSr.color = _sprites != null ? Color.white : BodyColor;
@@ -681,8 +690,13 @@ public class PlayerController : MonoBehaviour
         UpdateAnimation();
         if (Translucent && _visualSr != null)
         {
+            // 보임(GhostVisibleTime) ↔ 숨음(GhostHiddenTime) 을 번갈아. 숨음에 들어가면 그 시간 동안 완전히 사라진 채 유지 (QA: 약 1초)
+            GhostPhaseTime += Time.deltaTime;
+            float phaseLen = GhostHidden ? GhostHiddenTime : GhostVisibleTime;
+            if (GhostPhaseTime >= phaseLen) { GhostHidden = !GhostHidden; GhostPhaseTime = 0f; }
+            float k = GhostFadeTime > 0f ? Mathf.Clamp01(GhostPhaseTime / GhostFadeTime) : 1f;
             var c = _visualSr.color;
-            c.a = 0.10f + 0.25f * (0.5f + 0.5f * Mathf.Sin(Time.time * 7f));   // 0.10 ~ 0.35 사이로 깜빡임
+            c.a = GhostHidden ? Mathf.Lerp(GhostVisibleAlpha, 0f, k) : Mathf.Lerp(0f, GhostVisibleAlpha, k);
             _visualSr.color = c;
         }
 

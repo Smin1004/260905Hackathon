@@ -67,7 +67,7 @@
 | 11 | 고무공 | 모든 착지에서 낙하 속도 ×0.6 으로 재도약 (3u/s 미만이면 멈춤) | 3 | `AlwaysBounceFactor` |
 | 12 | 달 걷기 | 중력 ×0.5, 점프 속도 ×0.71 (높이 동일·체공 2배) | 1 | `RiseGravity`/`FallGravity`/`JumpSpeed` — 고중력과 조합 금지 |
 | 13 | 튕기는 몸 | 벽(옆면) 접촉 시 7u/s 로 반대로 밀림, 0.18s 조작 잠금 | 2 | `WallBounceSpeed` |
-| 14 | 투명 인간 | 캐릭터 알파 0.10~0.35 깜빡임 | 2 | `Translucent` |
+| 14 | 투명 인간 | 보임 1.2초(알파 0.6) ↔ **숨음 1.0초(알파 0)** 반복, 페이드 0.15초 | 2 | `Translucent`, `GhostVisibleTime`/`GhostHiddenTime`/`GhostVisibleAlpha` |
 
 이전 초안(점프 금지·역이동 금지·대기 금지)은 조작감 분석 결과 불쾌감이 커 보류. 선택 유효성 검사(조합 금지 등)는 미구현.
 
