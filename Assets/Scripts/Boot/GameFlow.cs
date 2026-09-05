@@ -587,13 +587,22 @@ public class GameFlow : MonoBehaviour
         var s = _data.Settings;
         var outcome = Ranking.Judge(_data.MyResult, _data.OpponentParTime, _data.OpponentResult, _data.MyParTime, s);
         _resultTitle.text = Ranking.OutcomeText(outcome);
+
+        // 양쪽 맵 썸네일 — 왼쪽: 내가 만든 맵(상대가 플레이), 오른쪽: 상대가 만든 맵(내가 플레이). 이전 라운드 것은 먼저 정리.
+        ClearResultThumbnails();
+        var palette = StrokePalette.LoadOrDefault();
+        FillResultThumb(_myMapImage, _myMapCaption, ref _myMapSprite, _data.MyMap, palette,
+            $"<b>{_data.MyNickname} (나)</b>가 만든 맵 · 패타임 {_data.MyParTime:0.00}s\n{_data.OpponentNickname}의 기록: {Ranking.RecordText(_data.OpponentResult, s)}");
+        FillResultThumb(_oppMapImage, _oppMapCaption, ref _oppMapSprite, _data.OpponentMap, palette,
+            $"<b>{_data.OpponentNickname}</b>가 만든 맵 · 패타임 {_data.OpponentParTime:0.00}s\n{_data.MyNickname} (나)의 기록: {Ranking.RecordText(_data.MyResult, s)}");
+        _thumbRow.SetActive(_data.MyMap != null || _data.OpponentMap != null);
+
         string par = s.ParTimeMode
-            ? $"\n\n패타임 모드: 내 점수 {Ranking.Score(_data.MyResult, _data.OpponentParTime, s):0.00}  /  상대 점수 {Ranking.Score(_data.OpponentResult, _data.MyParTime, s):0.00}"
+            ? $"\n패타임 모드: 내 점수 {Ranking.Score(_data.MyResult, _data.OpponentParTime, s):0.00}  /  상대 점수 {Ranking.Score(_data.OpponentResult, _data.MyParTime, s):0.00}"
             : "";
         _resultBody.text =
-            $"라운드 {Round}\n\n" +
-            $"{_data.MyNickname} (나) — {_data.OpponentNickname}의 맵: {Ranking.RecordText(_data.MyResult, s)}   (맵 패타임 {_data.OpponentParTime:0.00}s)   뜻: {VowCatalog.NamesOf(_data.MyVows)}\n" +
-            $"{_data.OpponentNickname} — {_data.MyNickname}의 맵: {Ranking.RecordText(_data.OpponentResult, s)}   (맵 패타임 {_data.MyParTime:0.00}s)   뜻: {VowCatalog.NamesOf(_data.OpponentVows)}" + par;
+            $"라운드 {Round}\n" +
+            $"{_data.MyNickname} (나) 뜻: {VowCatalog.NamesOf(_data.MyVows)}   |   {_data.OpponentNickname} 뜻: {VowCatalog.NamesOf(_data.OpponentVows)}" + par;
         _nextRoundBtn.gameObject.SetActive(true);
         _nextRoundBtn.interactable = true;
         _nextRoundBtn.GetComponentInChildren<Text>().text = "다음 라운드 (같은 방)";
@@ -731,8 +740,17 @@ public class GameFlow : MonoBehaviour
         // ---- 결과 / 무효
         _resultPanel = RuntimeUI.Panel(root, Vector2.zero, Vector2.one, new Color(0.10f, 0.11f, 0.14f)).gameObject;
         var rp = _resultPanel.transform;
-        _resultTitle = RuntimeUI.Label(rp, new Vector2(0f, 0.72f), new Vector2(1f, 0.92f), "", 96, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
-        _resultBody = RuntimeUI.Label(rp, new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.70f), "", 28, TextAnchor.MiddleCenter, new Color(0.9f, 0.9f, 0.95f));
+        _resultTitle = RuntimeUI.Label(rp, new Vector2(0f, 0.80f), new Vector2(1f, 0.96f), "", 88, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+
+        // 양쪽 맵 썸네일 (왼쪽: 내가 만든 맵 / 오른쪽: 상대가 만든 맵). 정상 결과(ShowResult)에서만 채우고 켠다.
+        // Result(·다음 라운드 대기) 상태를 벗어나면(다음 라운드 시작·방 나가기·무효) 텍스처를 정리하고 숨긴다 → 제출 실패·무효 결과에 이전 썸네일이 남지 않는다.
+        _thumbRow = RuntimeUI.Rect("MapThumbnails", rp, new Vector2(0.06f, 0.42f), new Vector2(0.94f, 0.79f), 0f).gameObject;
+        _myMapImage = BuildResultThumb(_thumbRow.transform, new Vector2(0.00f, 0f), new Vector2(0.49f, 1f), out _myMapCaption);
+        _oppMapImage = BuildResultThumb(_thumbRow.transform, new Vector2(0.51f, 0f), new Vector2(1.00f, 1f), out _oppMapCaption);
+        _thumbRow.SetActive(false);
+        StateChanged += st => { if (st != MatchState.Result && st != MatchState.WaitingNextRound) ClearResultThumbnails(); };   // [다음 라운드] 대기 중에는 결과 화면이 그대로 보이므로 유지
+
+        _resultBody = RuntimeUI.Label(rp, new Vector2(0.08f, 0.29f), new Vector2(0.92f, 0.41f), "", 24, TextAnchor.MiddleCenter, new Color(0.9f, 0.9f, 0.95f));
         _nextRoundBtn = RuntimeUI.Button(rp, new Vector2(0.20f, 0.18f), new Vector2(0.48f, 0.28f), "다음 라운드 (같은 방)", RequestNextRound, new Color(0.20f, 0.65f, 0.40f), 28);
         _waitNewBtn = RuntimeUI.Button(rp, new Vector2(0.20f, 0.18f), new Vector2(0.48f, 0.28f), "같은 방에서 새 상대 기다리기", WaitForNewOpponent, new Color(0.25f, 0.55f, 0.95f), 24);
         _resultLeaveBtn = RuntimeUI.Button(rp, new Vector2(0.52f, 0.18f), new Vector2(0.80f, 0.28f), "방 나가기", LeaveRoom, new Color(0.6f, 0.3f, 0.3f), 28);
@@ -743,6 +761,51 @@ public class GameFlow : MonoBehaviour
     }
 
     Text _resultHint;
+
+    // ---- 결과 화면 맵 썸네일 (ShowResult / BuildUI 결과 패널 전용)
+    GameObject _thumbRow;
+    Image _myMapImage, _oppMapImage;
+    Text _myMapCaption, _oppMapCaption;
+    Sprite _myMapSprite, _oppMapSprite;
+    const int ThumbWidth = 600, ThumbHeight = 300;   // 캔버스 30×15 비율
+
+    /// <summary>썸네일 슬롯 1개: 종이색 프레임 + 비율 유지 Image + 아래 캡션 2줄.</summary>
+    static Image BuildResultThumb(Transform parent, Vector2 aMin, Vector2 aMax, out Text caption)
+    {
+        var slot = RuntimeUI.Rect("Thumb", parent, aMin, aMax, 0f);
+        var frame = RuntimeUI.Panel(slot, new Vector2(0f, 0.30f), new Vector2(1f, 1f), new Color(0.05f, 0.05f, 0.08f, 0.6f));
+        var imgRt = RuntimeUI.Rect("Image", frame, Vector2.zero, Vector2.one, 8f);
+        var img = imgRt.gameObject.AddComponent<Image>();
+        img.preserveAspect = true;
+        img.raycastTarget = false;
+        img.color = Color.white;
+        caption = RuntimeUI.Label(slot, new Vector2(0f, 0f), new Vector2(1f, 0.28f), "", 22, TextAnchor.UpperCenter, new Color(0.9f, 0.9f, 0.95f));
+        caption.supportRichText = true;
+        return img;
+    }
+
+    /// <summary>한쪽 썸네일 채우기. map 이 null(제출 실패 등)이면 그 슬롯을 숨긴다.</summary>
+    void FillResultThumb(Image img, Text caption, ref Sprite sprite, MapData map, StrokePalette palette, string captionText)
+    {
+        MapThumbnail.Release(ref sprite);
+        bool has = map != null;
+        img.transform.parent.gameObject.SetActive(has);
+        caption.gameObject.SetActive(has);
+        if (!has) return;
+        sprite = MapThumbnail.RenderSprite(map, palette, ThumbWidth, ThumbHeight);
+        img.sprite = sprite;
+        caption.text = captionText;
+    }
+
+    /// <summary>썸네일 텍스처·스프라이트 파괴 + 숨김. ShowResult 진입 시와 Result 상태를 벗어날 때 호출.</summary>
+    void ClearResultThumbnails()
+    {
+        if (_myMapImage != null) _myMapImage.sprite = null;
+        if (_oppMapImage != null) _oppMapImage.sprite = null;
+        MapThumbnail.Release(ref _myMapSprite);
+        MapThumbnail.Release(ref _oppMapSprite);
+        if (_thumbRow != null) _thumbRow.SetActive(false);
+    }
 
     void ShowPanel(GameObject panel)
     {
