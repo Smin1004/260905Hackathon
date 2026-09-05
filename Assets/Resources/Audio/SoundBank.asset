@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a7eed4fb1f85c246b5e92d770c4ce9a, type: 3}
+  m_Name: SoundBank
+  m_EditorClassIdentifier: 
+  MusicLobbyEdit: {fileID: 8300000, guid: 3df7baec0d865514abcb750d62a50ebd, type: 3}
+  MusicBattle: {fileID: 8300000, guid: ae17de6285d93eb49aa9039c4656649a, type: 3}
+  Click: {fileID: 8300000, guid: c6fc62e9248c2a84a92056cd838921fd, type: 3}
+  Jump: {fileID: 8300000, guid: f28449532e0f57041ae9cc561e5a36c7, type: 3}
+  Land: {fileID: 8300000, guid: 0445c0dbf5e0c3a40beb95f262149ed5, type: 3}
+  Confirm: {fileID: 8300000, guid: b1dab9f61aa93ae43997fe074cd4cf40, type: 3}
+  Drawing: {fileID: 8300000, guid: 496e85900b75540459714e0a4b587237, type: 3}
+  Eraser: {fileID: 8300000, guid: c4f99d9530966324e8809285a18463b0, type: 3}
+  Clock: {fileID: 8300000, guid: ced21a17700c5ca41bb29bdc0b65993d, type: 3}
+  MusicVolume: 0.35
+  SfxVolume: 0.7
+  LoopVolume: 0.45
+  MusicFade: 0.6

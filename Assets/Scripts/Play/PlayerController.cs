@@ -130,7 +130,7 @@ public class PlayerController : MonoBehaviour
     readonly List<Dust> _dust = new List<Dust>();
 
     AudioSource _audio;
-    static AudioClip _sfxJump, _sfxLand, _sfxDeath;
+    static AudioClip _sfxDeath;   // 사망만 절차음 (에셋 없음). 점프·착지는 SoundBank (Sound.Play)
 
     public static readonly Vector2 BodySize = new Vector2(0.6f, 0.9f);
     static readonly Color BodyColor = new Color(0.95f, 0.45f, 0.2f);
@@ -556,7 +556,7 @@ public class PlayerController : MonoBehaviour
     {
         Jumped?.Invoke();
         if (EnableSquashStretch) { _squash = new Vector2(0.75f, 1.3f); _squashTimer = SquashDuration; }
-        PlaySfx(_sfxJump);
+        if (EnableSound) Sound.Play(SfxId.Jump);
     }
 
     void OnLanded(float fallSpeed)
@@ -565,7 +565,7 @@ public class PlayerController : MonoBehaviour
         float k = Mathf.Clamp01(fallSpeed / MaxFallSpeed);
         if (EnableSquashStretch) { _squash = new Vector2(1.1f + 0.35f * k, 0.9f - 0.3f * k); _squashTimer = SquashDuration; }
         if (EnableDust) SpawnDust(new Vector2(transform.position.x, _col.bounds.min.y), 3 + Mathf.RoundToInt(3 * k), 1.5f + 2f * k);
-        PlaySfx(_sfxLand, 0.5f + 0.5f * k);
+        if (EnableSound) Sound.Play(SfxId.Land, 0.5f + 0.5f * k);
     }
 
     void UpdateVisualFeedback()
@@ -628,9 +628,7 @@ public class PlayerController : MonoBehaviour
 
     static void EnsureSfx()
     {
-        if (_sfxJump != null) return;
-        _sfxJump = MakeTone("sfx_jump", 0.09f, 420f, 880f, 0.6f);
-        _sfxLand = MakeTone("sfx_land", 0.07f, 180f, 90f, 0.8f);
+        if (_sfxDeath != null) return;
         _sfxDeath = MakeTone("sfx_death", 0.22f, 600f, 120f, 0.7f);
     }
 

@@ -106,6 +106,7 @@ public class MapEditorHud : MonoBehaviour
 
     void OnDestroy()
     {
+        Sound.SetLoop(LoopId.Clock, false);
         if (_c != null)
         {
             _c.Changed -= Refresh;
@@ -138,6 +139,7 @@ public class MapEditorHud : MonoBehaviour
     {
         if (b == null || b.Button == null) return;
         b.Button.onClick.RemoveAllListeners();
+        b.Button.onClick.AddListener(() => Sound.Click());
         b.Button.onClick.AddListener(a);
     }
 
@@ -168,7 +170,7 @@ public class MapEditorHud : MonoBehaviour
             btn.targetGraphic = v.Circle;
             int id = e.ColorId;
             btn.onClick.RemoveAllListeners();
-            btn.onClick.AddListener(() => _c.SetColorId(id));
+            btn.onClick.AddListener(() => { Sound.Click(); _c.SetColorId(id); });
             _swatches[id] = v;
         }
     }
@@ -291,6 +293,7 @@ public class MapEditorHud : MonoBehaviour
         if (ringFill != null) ringFill.fillAmount = _drawLimit > 0 ? remaining / _drawLimit : 0f;
 
         bool warn = _drawLimit > 0 && remaining <= warningSeconds;
+        if (isActiveAndEnabled) Sound.SetLoop(LoopId.Clock, warn && remaining > 0f);   // 마지막 10초 시계 소리 (같은 값이면 무시)
         if (warn != _warning || force)
         {
             _warning = warn;

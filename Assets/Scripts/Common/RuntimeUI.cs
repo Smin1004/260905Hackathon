@@ -98,6 +98,7 @@ public static class RuntimeUI
         colors.disabledColor = new Color(0.5f, 0.5f, 0.5f, 0.45f);
         colors.highlightedColor = new Color(1.1f, 1.1f, 1.1f);
         btn.colors = colors;
+        btn.onClick.AddListener(() => Sound.Click());   // 클릭음 공통 (Docs/102 3장)
         btn.onClick.AddListener(onClick);
         Label(rt, Vector2.zero, Vector2.one, label, fontSize, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
         return btn;

@@ -52,6 +52,7 @@
 
 | 날짜 | 변경 |
 |---|---|
+| 2026-09-06 | **사운드 추가** (102 3장): `Assets/Audio` 9개 파일 + `Resources/Audio/SoundBank.asset`(ScriptableObject, [Chojiilgwan > Build SoundBank]) + `Scripts/Common/Sound.cs` 정적 API(클릭·1회 효과음·상태 루프·배경음 크로스페이드). 배경음 lobby_edit/battle 을 `GameFlow.SetState` 로 전환, 클릭음 공통, 그리기·지우개·타이머 경고 루프, 점프·착지·확정됨. PlayHud/PlayerController 의 절차 생성 틱·점프·착지음은 에셋으로 교체 (사망음만 유지) |
 | 2026-09-06 | **랭킹 공식 → 패타임 빼기 단일화** (`Ranking.Score/Judge`, 206 2장·100 7.2·SUMMARY): `점수 = 클리어 시간 × 뜻 계수 − 패타임`, 낮을수록 승. 클리어 > 미클리어, **둘 다 미클리어 = 무승부**(시도 비교 없음). 패타임 모드 토글 폐기 → 방 설정 5종 (`RoomSettings.ParTimeMode` 삭제, Hello 설정 5종 — 201·205). 티어 계수 0.93/0.85 → **0.97/0.94** (패타임이 뜻 난이도를 흡수하므로 이중 보상 완화). 결과 화면: 식 작게 + 마진 크게 + 전적 (204 2.4) |
 | 2026-09-06 | **QA 반영** — 에디터 HUD(검증①/제출② 빨간 원형 버튼, 다시 실행 버튼, 도구 열·타이머 확대, 골 배치 색 구분, 안내 문구 제거, 색상 스와치 기능 라벨), 로비(방 생성·참가 후 입력 위젯 숨김), 파랑 얼음을 **하한 → 가산**으로 변경(미끄러운 발 뜻과 중첩 시 더 미끄러움, 101 1장), 방향 전환 즉시 제동은 가속 시간 ≤0.15s 일 때만(얼음·미끄러운 발은 관성 유지, `PlayerController.TurnSnapMaxAccelTime`), Play HUD 타이머 폭 확대 |
 | 2026-09-06 | **검증 플레이에 플레이 시간 제한 적용** (`MapEditorController.StartVerification` — 방 설정 `PlayTimeLimit`, 검증·교환 공용. 만료 시 미클리어 → 2.5초 뒤 에디터 복귀, 재검증마다 타이머 새로 시작, 시도 제한은 없음). 에디터 HUD 라운드 배지는 라운드 번호만 표시(`totalRounds` 기본 0). 202 2장 뜻 구현 방식을 실제 카탈로그 방식으로, SUMMARY·201 "방 설정 4종" → 6종 |

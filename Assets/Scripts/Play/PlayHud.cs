@@ -172,7 +172,6 @@ public class PlayHud : MonoBehaviour
     Image _flash, _vignetteImg;
 
     bool _warning;
-    int _lastTickSecond = -1;
     float _resultPop = -1f;
     float _flashT = -1f;
     float _vignetteT = -1f;
@@ -180,8 +179,6 @@ public class PlayHud : MonoBehaviour
     Vector3 _shakeApplied;
     Camera _shakeCam;
 
-    AudioSource _audio;
-    static AudioClip _sfxTick, _sfxTickLast;
 
     const float ResultPopDuration = 0.4f;
     const float FlashDuration = 0.35f;
@@ -281,7 +278,7 @@ public class PlayHud : MonoBehaviour
         colors.normalColor = Color.white; colors.highlightedColor = new Color(0.92f, 0.92f, 0.92f); colors.pressedColor = new Color(0.8f, 0.8f, 0.8f);
         colors.selectedColor = Color.white; colors.fadeDuration = 0.08f;
         _abortBtn.colors = colors;
-        _abortBtn.onClick.AddListener(() => { if (_session != null) _session.Abort(); });
+        _abortBtn.onClick.AddListener(() => { Sound.Click(); if (_session != null) _session.Abort(); });
         _abortLabel = Txt("Label", abortBg.transform, _session.AbortLabel, 18, FontStyle.Bold, Theme.Warning, TextAnchor.MiddleCenter);
         Stretch(_abortLabel.rectTransform);
 
@@ -304,10 +301,6 @@ public class PlayHud : MonoBehaviour
         _resultCard.gameObject.SetActive(false);
 
         // ---- 오디오 (틱 소리) — PlayerController 와 같은 절차 생성 톤
-        _audio = gameObject.AddComponent<AudioSource>();
-        _audio.playOnAwake = false;
-        _audio.spatialBlend = 0f;
-        EnsureSfx();
 
         RefreshStatic();
     }
@@ -377,6 +370,7 @@ public class PlayHud : MonoBehaviour
         _ringFill.fillAmount = countdown ? Mathf.Clamp01(shown / limit) : 1f;
 
         bool warn = countdown && shown <= WarningSeconds && !_session.IsFinished;
+        Sound.SetLoop(LoopId.Clock, warn && shown > 0f);   // 마지막 10초 시계 소리 (Docs/102 3장)
         if (warn != _warning)
         {
             _warning = warn;
@@ -387,14 +381,9 @@ public class PlayHud : MonoBehaviour
         }
         if (warn)
         {
-            // 경고 중 숫자 펄스 + 초가 바뀔 때마다 틱
+            // 경고 중 숫자 펄스 (소리는 위 시계 루프)
             float pulse = 1f + 0.12f * Mathf.Abs(Mathf.Sin((shown % 1f) * Mathf.PI));
             _timerNumber.rectTransform.localScale = Vector3.one * pulse;
-            if (sec != _lastTickSecond)
-            {
-                _lastTickSecond = sec;
-                PlaySfx(sec <= 3 ? _sfxTickLast : _sfxTick);
-            }
         }
         else if (_timerNumber.rectTransform.localScale != Vector3.one) _timerNumber.rectTransform.localScale = Vector3.one;
     }
@@ -491,46 +480,12 @@ public class PlayHud : MonoBehaviour
 
     void OnDisable()
     {
+        Sound.SetLoop(LoopId.Clock, false);
         // 흔들림 도중 파괴되면 카메라를 제자리로
         if (_shakeT >= 0f && _shakeCam != null) { _shakeCam.transform.position -= _shakeApplied; _shakeApplied = Vector3.zero; _shakeT = -1f; }
     }
 
     static float EaseOut(float t) => 1f - (1f - t) * (1f - t) * (1f - t);
-
-    // ------------------------------------------------------------------ 오디오 (절차 생성 — PlayerController.MakeTone 과 같은 방식)
-
-    void PlaySfx(AudioClip clip)
-    {
-        if (clip == null || _audio == null) return;
-        _audio.PlayOneShot(clip, 0.35f);
-    }
-
-    static void EnsureSfx()
-    {
-        if (_sfxTick != null) return;
-        _sfxTick = MakeTone("sfx_tick", 0.05f, 1400f, 1100f, 0.5f);
-        _sfxTickLast = MakeTone("sfx_tick_last", 0.08f, 1900f, 1500f, 0.6f);
-    }
-
-    static AudioClip MakeTone(string name, float duration, float f0, float f1, float gain)
-    {
-        const int rate = 44100;
-        int n = Mathf.CeilToInt(duration * rate);
-        var data = new float[n];
-        float phase = 0f;
-        for (int i = 0; i < n; i++)
-        {
-            float t = i / (float)n;
-            float f = Mathf.Lerp(f0, f1, t);
-            phase += 2f * Mathf.PI * f / rate;
-            float env = Mathf.Sin(Mathf.PI * t);
-            float sq = Mathf.Sin(phase) >= 0f ? 1f : -1f;
-            data[i] = (sq * 0.25f + Mathf.Sin(phase) * 0.75f) * env * gain;
-        }
-        var clip = AudioClip.Create(name, n, 1, rate, false);
-        clip.SetData(data, 0);
-        return clip;
-    }
 
     // ------------------------------------------------------------------ 위젯 헬퍼 (MapEditorHudBuilder 와 같은 규약)
 

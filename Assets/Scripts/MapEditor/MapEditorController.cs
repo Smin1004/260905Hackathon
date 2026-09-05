@@ -132,6 +132,17 @@ public class MapEditorController : MonoBehaviour
         SetStatus("펜으로 선을 그리세요. 선이 곧 벽입니다. 골을 배치하고 검증 플레이로 클리어하면 제출할 수 있습니다.");
     }
 
+    void Start()
+    {
+        if (GameFlow.Instance == null) Sound.PlayMusic(MusicId.LobbyEdit);   // 씬 단독 실행(테스트) — 매치 중에는 GameFlow 가 배경음을 관리
+    }
+
+    void OnDestroy()
+    {
+        Sound.SetLoop(LoopId.Drawing, false);
+        Sound.SetLoop(LoopId.Eraser, false);
+    }
+
     void Update()
     {
         if (_hud == null && !Mathf.Approximately(_lastAspect, targetCamera.aspect)) FitCamera();   // HUD 가 있으면 HUD 가 슬롯에 맞춰 호출
@@ -297,6 +308,7 @@ public class MapEditorController : MonoBehaviour
         }
         _current = new List<Vector2> { StrokeGeometry.ClampToCanvas(world) };
         _drawing = true;
+        Sound.SetLoop(LoopId.Drawing, true);
         _preview.startWidth = _preview.endWidth = PenWidth;
         _preview.startColor = _preview.endColor = palette.GetColor(ColorId);
         StrokeVisual.SetPoints(_preview, _current);
@@ -317,6 +329,7 @@ public class MapEditorController : MonoBehaviour
     {
         if (!_drawing) return null;
         _drawing = false;
+        Sound.SetLoop(LoopId.Drawing, false);
         _preview.positionCount = 0;
 
         if (_current == null || _current.Count < 2) { _current = null; return null; }
@@ -349,6 +362,7 @@ public class MapEditorController : MonoBehaviour
     {
         if (_erasing || InVerification) return;
         _erasing = true;
+        Sound.SetLoop(LoopId.Eraser, true);
         _eraseChangedAny = false;
         PushUndo();   // 드래그 1회 = 실행취소 1단계. 아무것도 안 지웠으면 EndErase 에서 되돌린다
     }
@@ -370,6 +384,7 @@ public class MapEditorController : MonoBehaviour
     {
         if (!_erasing) return;
         _erasing = false;
+        Sound.SetLoop(LoopId.Eraser, false);
         if (!_eraseChangedAny && _undo.Count > 0) _undo.Pop();
         if (_eraseChangedAny) SetStatus($"지움 — 스트로크 {Map.Strokes.Count}/{MapConstants.MaxStrokes}");
         Changed?.Invoke();
@@ -408,8 +423,8 @@ public class MapEditorController : MonoBehaviour
     public bool Undo()
     {
         if (InVerification) return false;
-        if (_drawing) { _drawing = false; _preview.positionCount = 0; _current = null; }
-        if (_erasing) { _erasing = false; }
+        if (_drawing) { _drawing = false; _preview.positionCount = 0; _current = null; Sound.SetLoop(LoopId.Drawing, false); }
+        if (_erasing) { _erasing = false; Sound.SetLoop(LoopId.Eraser, false); }
         if (_undo.Count == 0) return false;
         _redo.Push(Map.Clone());
         Map = _undo.Pop();
@@ -578,6 +593,7 @@ public class MapEditorController : MonoBehaviour
         MatchData.Instance.MyParTime = VerifiedParTime;
         SetStatus($"제출 — 스트로크 {Map.Strokes.Count}, 점 {Map.TotalPoints}, 패타임 {VerifiedParTime:0.00}s, 전송 {payload.Length / 1024f:0.0} KB (청크 {chunks}개), 왕복 검증 OK{sizeWarn}");
         Debug.Log("[MapEditor] " + Status);
+        Sound.Play(SfxId.Confirm);   // 확정됨
         Completed?.Invoke(Map.Clone(), payload);
         Changed?.Invoke();
         return payload;

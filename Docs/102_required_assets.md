@@ -50,14 +50,23 @@
 | 골 클리어 이펙트 | 파티클 1종 |
 | 점프/낙하/리스폰 이펙트 | 파티클 또는 스프라이트 애니메이션 |
 
-## 3. 오디오 (전부 선택 — 시간 남으면)
+## 3. 오디오 — **구현됨** (2026-09-06)
 
-| 에셋 | 용도 | 소스 후보 |
+파일은 `Assets/Audio/`, 연결은 `Assets/Resources/Audio/SoundBank.asset`(ScriptableObject — 클립·볼륨·페이드). 메뉴 [Chojiilgwan > Build SoundBank]가 파일명 규약으로 자동 연결한다. 재생은 `Sound` 정적 API(`Scripts/Common/Sound.cs`)만 사용 — 씬 코드에서 AudioSource 를 직접 만들지 않는다.
+
+| 파일 | 용도 | 호출 위치 |
 |---|---|---|
-| BGM 1트랙 | 로비/플레이 공용 | 무료 BGM 사이트 (라이선스 확인) |
-| 클릭음 | 버튼 공통 | 무료 SFX 팩 |
-| 골 클리어음 | 클리어 연출 | 무료 SFX 팩 |
-| 그리기 효과음 | 에디터 몰입감 | 무료 SFX 팩 |
+| `bgm_lobby_edit` | 배경음 — 로비·뜻 선택·에디터(검증 포함)·결과 | `GameFlow.SetState` (크로스페이드), 에디터 씬 단독 실행 시 `MapEditorController.Start` |
+| `bgm_battle` | 배경음 — 교환 플레이(결과 대기 포함) | `GameFlow.SetState` |
+| `sfx_click` | 버튼 클릭 공통 | `RuntimeUI.Button`, `MapEditorHud.Hook`·스와치, `PlayHud` 기권 버튼 |
+| `sfx_jump` / `sfx_land` | 점프 / 착지 (착지 속도에 따라 볼륨) | `PlayerController` |
+| `sfx_confirm` | 확정됨 — 뜻 확정, 맵 제출 | `GameFlow.ConfirmVows`, `MapEditorController.Complete` |
+| `sfx_drawing` (루프) | 펜으로 그리는 동안 | `MapEditorController.BeginStroke/EndStroke` |
+| `sfx_eraser` (루프) | 지우개 드래그 동안 | `MapEditorController.BeginErase/EndErase` |
+| `sfx_clock` (루프) | 타이머 마지막 10초 | `MapEditorHud.UpdateTimer`, `PlayHud` 타이머 |
+
+- 사망음은 에셋이 없어 `PlayerController` 절차 생성음 유지. 골 클리어음은 미구현 (에셋 추가 시 `SoundBank` 필드 + `PlaySession` 클리어 지점에 한 줄)
+- 라이선스: 팀 제작/제공 파일 (출처 확인 필요 시 팀에)
 
 ## 4. 외부 의존성 (에셋이 아닌 준비물)
 

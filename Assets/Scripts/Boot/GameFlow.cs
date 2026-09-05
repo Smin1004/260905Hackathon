@@ -316,6 +316,7 @@ public class GameFlow : MonoBehaviour
         if (picks != null) { _vowPicks.Clear(); foreach (var v in picks) if (!_vowPicks.Contains(v) && VowCatalog.Get(v) != null) _vowPicks.Add(v); }
         if (_vowPicks.Count != VowPickCount) return false;
         _myVowsConfirmed = true;
+        Sound.Play(SfxId.Confirm);   // 확정됨
         _data.MyVows.Clear(); _data.MyVows.AddRange(_vowPicks);
         _data.MyVowHistory.Add(new System.Collections.Generic.List<VowId>(_data.MyVows));   // 라운드 이력 (일관성 계수)
         _net.SendVows(_data.MyVows);
@@ -744,6 +745,8 @@ public class GameFlow : MonoBehaviour
     {
         State = s;
         Debug.Log("[GameFlow] state → " + s);
+        // 배경음: 교환 플레이(결과 대기 포함) = battle, 그 외(로비·뜻 선택·에디터·결과) = lobby_edit (Docs/102 3장)
+        Sound.PlayMusic(s == MatchState.ExchangePlay || s == MatchState.WaitingResult ? MusicId.Battle : MusicId.LobbyEdit);
         StateChanged?.Invoke(s);
     }
 
