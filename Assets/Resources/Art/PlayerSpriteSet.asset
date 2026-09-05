@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d1c5bb836da0a142a50d0b98e1bd63a, type: 3}
+  m_Name: PlayerSpriteSet
+  m_EditorClassIdentifier: 
+  Idle:
+  - {fileID: -1775345147, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: 783973947, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: 434716803, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: 1030841216, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  JumpUp:
+  - {fileID: -1173755599, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: -339921303, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: -1578303697, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  JumpDown:
+  - {fileID: -1883847688, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: -753067363, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: -466010314, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  Walk:
+  - {fileID: -1304211683, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: -1334299929, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: 1174469801, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: 1982019130, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  Spare:
+  - {fileID: 2028635751, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  - {fileID: 864602268, guid: 4026f1f69b55e21488f16bbc233fa4fd, type: 3}
+  IdleFps: 4
+  WalkFps: 10

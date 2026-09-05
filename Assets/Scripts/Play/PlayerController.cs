@@ -122,6 +122,9 @@ public class PlayerController : MonoBehaviour
     // ---- 비주얼
     Transform _visual;
     SpriteRenderer _visualSr;
+    PlayerSpriteSet _sprites;      // 스프라이트 시트 (없으면 사각형 플레이스홀더)
+    bool _pivotBottom;             // 비주얼 스프라이트 피벗이 발(bottom)인가 — 시트는 발, 플레이스홀더 사각형은 중앙
+    float _animTime;
     Vector2 _squash = Vector2.one;
     float _squashTimer;
     const float SquashDuration = 0.14f;
@@ -151,15 +154,28 @@ public class PlayerController : MonoBehaviour
 
         var visual = new GameObject("Visual");
         visual.transform.SetParent(go.transform, false);
-        visual.transform.localScale = new Vector3(BodySize.x, BodySize.y, 1f);
         var sr = visual.AddComponent<SpriteRenderer>();
-        sr.sprite = RuntimeSprites.White;
-        sr.color = BodyColor;
         sr.sortingOrder = 20;
 
         var pc = go.AddComponent<PlayerController>();
         pc._visual = visual.transform;
         pc._visualSr = sr;
+        pc._sprites = PlayerSpriteSet.LoadOrNull();
+        if (pc._sprites != null)
+        {
+            // 시트: PPU 가 idle 높이 = BodySize.y 로 맞춰져 있고 피벗은 발 → 스케일 1, 색 흰색 (Docs/102 1.1)
+            sr.sprite = pc._sprites.Idle[0];
+            sr.color = Color.white;
+            pc._pivotBottom = true;
+        }
+        else
+        {
+            // 플레이스홀더: 1u 흰 사각형(중앙 피벗)을 몸 크기로 늘림
+            sr.sprite = RuntimeSprites.White;
+            sr.color = BodyColor;
+            pc._pivotBottom = false;
+        }
+        pc.ApplyVisualTransform(Vector2.one);
         return pc;
     }
 
@@ -509,8 +525,9 @@ public class PlayerController : MonoBehaviour
         _bouncing = false; _pendingBounce = 0f; SetGroundCollider(null);
         _lastFallSpeed = 0f; _wasGrounded = false;
         _squash = Vector2.one; _squashTimer = 0f;
-        if (_visual != null) { _visual.localScale = new Vector3(_bodySize.x, _bodySize.y, 1f); _visual.localPosition = Vector3.zero; }
-        if (_visualSr != null) _visualSr.color = BodyColor;
+        ApplyVisualTransform(Vector2.one);
+        if (_visualSr != null) _visualSr.color = _sprites != null ? Color.white : BodyColor;
+        _animTime = 0f;
     }
 
     public void Freeze()
@@ -530,7 +547,7 @@ public class PlayerController : MonoBehaviour
         var before = _bodySize;
         _bodySize = BodySize * scale;
         _col.size = _bodySize;
-        if (_visual != null) _visual.localScale = new Vector3(_bodySize.x, _bodySize.y, 1f);
+        ApplyVisualTransform(Vector2.one);
         float lift = (_bodySize.y - before.y) * 0.5f + 0.02f;
         if (lift > 0f) { _rb.position += new Vector2(0f, lift); transform.position += new Vector3(0f, lift, 0f); }
     }
@@ -568,6 +585,52 @@ public class PlayerController : MonoBehaviour
         if (EnableSound) Sound.Play(SfxId.Land, 0.5f + 0.5f * k);
     }
 
+    /// <summary>
+    /// 비주얼 스케일·위치를 몸집 배율(뜻: 큰 몸집)과 스쿼시 배율로 맞춘다. 발이 콜라이더 바닥에 붙는다.
+    /// 시트: 스케일 1 = 몸 크기(PPU 로 맞춤), 피벗 = 발. 플레이스홀더: 1u 사각형(중앙 피벗)을 BodySize 로 늘림.
+    /// </summary>
+    void ApplyVisualTransform(Vector2 squash)
+    {
+        if (_visual == null) return;
+        float kx = _bodySize.x / BodySize.x, ky = _bodySize.y / BodySize.y;   // 몸집 배율
+        float unitX = _sprites != null ? 1f : BodySize.x, unitY = _sprites != null ? 1f : BodySize.y;
+        _visual.localScale = new Vector3(unitX * kx * squash.x, unitY * ky * squash.y, 1f);
+        float feet = -_bodySize.y * 0.5f;
+        float height = _bodySize.y * squash.y;
+        _visual.localPosition = new Vector3(0f, _pivotBottom ? feet : feet + height * 0.5f, 0f);
+    }
+
+    /// <summary>시트 애니메이션: 지상 정지 Idle / 지상 이동 Walk(속도 비례) / 공중 상승 JumpUp(속도가 줄수록 뒤 프레임) / 공중 하강 JumpDown(낙하가 빨라질수록 뒤 프레임)</summary>
+    void UpdateAnimation()
+    {
+        if (_sprites == null || _visualSr == null) return;
+        Sprite frame;
+        var v = _rb != null ? _rb.linearVelocity : Vector2.zero;
+        if (IsGrounded)
+        {
+            float speed = Mathf.Abs(v.x);
+            if (speed > 0.3f || Mathf.Abs(MoveInput) > 0.1f)
+            {
+                _animTime += Time.deltaTime * Mathf.Clamp(speed / Mathf.Max(0.1f, MoveSpeed), 0.5f, 1.2f);
+                frame = PlayerSpriteSet.Loop(_sprites.Walk, _animTime, _sprites.WalkFps);
+            }
+            else
+            {
+                _animTime += Time.deltaTime;
+                frame = PlayerSpriteSet.Loop(_sprites.Idle, _animTime, _sprites.IdleFps);
+            }
+        }
+        else if (v.y > 0f)
+        {
+            frame = PlayerSpriteSet.ByProgress(_sprites.JumpUp, 1f - Mathf.Clamp01(v.y / Mathf.Max(0.1f, JumpSpeed)));   // 최고점에 가까울수록 뒤 프레임
+        }
+        else
+        {
+            frame = PlayerSpriteSet.ByProgress(_sprites.JumpDown, Mathf.Clamp01(-v.y / Mathf.Max(0.1f, JumpSpeed)));     // 낙하가 빨라질수록 뒤 프레임 (착지 자세)
+        }
+        if (frame != null && _visualSr.sprite != frame) _visualSr.sprite = frame;
+    }
+
     void UpdateVisualFeedback()
     {
         if (_visual != null)
@@ -576,16 +639,11 @@ public class PlayerController : MonoBehaviour
             {
                 _squashTimer -= Time.deltaTime;
                 float t = 1f - Mathf.Clamp01(_squashTimer / SquashDuration);   // 0 → 1
-                var s = Vector2.Lerp(_squash, Vector2.one, t);
-                _visual.localScale = new Vector3(_bodySize.x * s.x, _bodySize.y * s.y, 1f);
-                _visual.localPosition = new Vector3(0f, (_bodySize.y * s.y - _bodySize.y) * 0.5f, 0f);   // 발 기준으로 늘고 줄게
-            }
-            else if (_visual.localScale.y != _bodySize.y)
-            {
-                _visual.localScale = new Vector3(_bodySize.x, _bodySize.y, 1f);
-                _visual.localPosition = Vector3.zero;
+                ApplyVisualTransform(Vector2.Lerp(_squash, Vector2.one, t));
+                if (_squashTimer <= 0f) ApplyVisualTransform(Vector2.one);
             }
         }
+        UpdateAnimation();
 
         for (int i = _dust.Count - 1; i >= 0; i--)
         {

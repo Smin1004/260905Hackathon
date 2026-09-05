@@ -52,6 +52,7 @@
 
 | 날짜 | 변경 |
 |---|---|
+| 2026-09-06 | **플레이어 스프라이트 교체** (102 1.1): `Art/Player/player_sheet.png` 4×4 시트 → [Chojiilgwan > Build Player Sprites] 로 슬라이스·`PlayerSpriteSet` 생성. `PlayerController` Idle/Walk/JumpUp/JumpDown 프레임 선택, 발 피벗 기준 비주얼 변환 통합(큰 몸집·스쿼시 호환), 세트 없으면 플레이스홀더 |
 | 2026-09-06 | QA: 에디터 [검증] 버튼은 편집 중 항상 활성(조건 미충족 시 상태 문구), 비활성은 [제출]만 (204 2.2) |
 | 2026-09-06 | **WebGL 빌드 세팅** (205 2.3): `Scripts/Common/WebBuild.cs` 메뉴 [Chojiilgwan > WebGL > Apply Settings / Build] — Gzip+압축 해제 폴백, 스트리핑 Low, IL2CPP Release·OptimizeSize, 1280×720, runInBackground. Relay WSS(`NetService` WebGL 에서 `UseWebSockets`), 클립보드 jslib(`Plugins/WebGL/Clipboard.jslib` + `Clipboard.cs`), SoundBank 배경음 Streaming → CompressedInMemory(WebGL 미지원) |
 | 2026-09-06 | **홈 화면 재배치** (204 2.1): 방 화면과 같은 카드 스타일(닉네임 → 방 만들기 → 코드 참가), **닉네임 필수** — 미입력 시 방 만들기·참가 비활성(코드 미입력 시 참가 비활성), 안내 문구 |
