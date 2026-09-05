@@ -82,6 +82,8 @@ public class PlayerController : MonoBehaviour
 
     public event Action Jumped;
     public event Action<float> Landed;   // 착지 속도(양수)
+    /// <summary>위험 구역(HazardStroke)에 닿음. PlaySession 이 구독해 리스폰한다 (Docs/101 1장 빨강).</summary>
+    public event Action HazardTouched;
 
     Rigidbody2D _rb;
     BoxCollider2D _col;
@@ -100,6 +102,21 @@ public class PlayerController : MonoBehaviour
     float _lastFallSpeed;
     float _cooldownUntil = float.NegativeInfinity;
     Vector2 _bodySize = BodySize;
+
+    // ---- 발밑 표면 (색상별 기능 — Docs/101 1장). UpdateGround 가 갱신, 공중에서는 null
+    Collider2D _groundCollider;
+    SurfaceModifier _surface;      // 파랑 얼음: 서 있는 동안만 배율/하한 적용 (뜻이 정한 기준값은 그대로)
+    BounceStroke _groundBounce;    // 초록 바운스
+    bool _bouncing;                // 바운스로 떠 있는 중 (점프와 달리 키 떼기 컷 없음)
+    float _pendingBounce;          // 이번 스텝 착지에서 발동할 바운스 배율 (0 = 없음)
+    bool _groundChanged;           // 이번 스텝에 발밑 콜라이더가 바뀜 (검정 → 초록으로 걸어 올라선 경우도 바운스)
+
+    /// <summary>현재 발밑 표면 보정 (얼음 위가 아니면 null).</summary>
+    public SurfaceModifier CurrentSurface => _surface;
+    /// <summary>얼음 등 표면 보정을 반영한 실효 지상 가속 시간. 뜻이 바꾼 GroundAccelTime 을 기준값으로 쓴다.</summary>
+    public float EffectiveGroundAccelTime => _surface != null ? Mathf.Max(GroundAccelTime, _surface.MinGroundAccelTime) : GroundAccelTime;
+    public float EffectiveGroundDecelTime => _surface != null ? Mathf.Max(GroundDecelTime, _surface.MinGroundDecelTime) : GroundDecelTime;
+    public float EffectiveIdleFriction => _surface != null ? IdleFriction * _surface.FrictionMultiplier : IdleFriction;
 
     // ---- 비주얼
     Transform _visual;
@@ -210,19 +227,23 @@ public class PlayerController : MonoBehaviour
         UpdateGround();
 
         float now = Time.fixedTime;
-        if (IsGrounded) { _lastGroundedTime = now; _jumping = false; _jumpCut = false; _apexTimer = 0f; }
+        if (IsGrounded) { _lastGroundedTime = now; _jumping = false; _jumpCut = false; _apexTimer = 0f; _bouncing = false; }
 
-        // 착지 감지 (피드백)
+        // 착지 감지 (피드백 + 초록 바운스)
+        _pendingBounce = 0f;
         if (IsGrounded && !_wasGrounded)
         {
             if (JumpCooldownAfterLanding > 0f) _cooldownUntil = now + JumpCooldownAfterLanding;
             if (_lastFallSpeed > 2f) OnLanded(_lastFallSpeed);
         }
+        // 초록 바운스: 착지했거나 걸어서 초록 선 위로 올라선 스텝에 발동 (속도 확정 후 아래에서 적용)
+        if (IsGrounded && _groundBounce != null && (!_wasGrounded || _groundChanged))
+            _pendingBounce = Mathf.Max(0f, _groundBounce.SpeedMultiplier);
         _wasGrounded = IsGrounded;
 
         bool jumpBuffered = Time.time - _jumpPressedTime <= JumpBufferTime;
         bool canJump = (IsGrounded || now - _lastGroundedTime <= CoyoteTime) && !JumpsExhausted && now >= _cooldownUntil;
-        bool doJump = jumpBuffered && canJump;
+        bool doJump = jumpBuffered && canJump && _pendingBounce <= 0f;   // 바운스 스텝에는 점프를 소모하지 않는다
         if (jumpBuffered && !canJump && (JumpsExhausted || now < _cooldownUntil)) _jumpPressedTime = float.NegativeInfinity;   // 막힌 입력은 버퍼에 남기지 않는다
 
         var v = _rb.linearVelocity;
@@ -233,15 +254,16 @@ public class PlayerController : MonoBehaviour
         if (IsGrounded && !doJump)
         {
             var tangent = new Vector2(GroundNormal.y, -GroundNormal.x);        // 노멀에 수직, 오른쪽 방향
+            float decelTime = EffectiveGroundDecelTime;                          // 얼음 위에서는 하한이 적용됨 (Docs/101 파랑)
             if (idle)
             {
-                if (GroundDecelTime <= 0f) v = Vector2.zero;                                        // 정지 즉시 (마찰 재질이 경사에서 붙잡음)
-                else { float along = Vector2.Dot(v, tangent); along = Mathf.MoveTowards(along, 0f, (MoveSpeed / GroundDecelTime) * dt); v = tangent * along; }
+                if (decelTime <= 0f) v = Vector2.zero;                                              // 정지 즉시 (마찰 재질이 경사에서 붙잡음)
+                else { float along = Vector2.Dot(v, tangent); along = Mathf.MoveTowards(along, 0f, (MoveSpeed / decelTime) * dt); v = tangent * along; }
             }
             else
             {
                 float along = Vector2.Dot(v, tangent);
-                along = Accelerate(along, target, GroundAccelTime, dt);
+                along = Accelerate(along, target, EffectiveGroundAccelTime, dt);
                 v = tangent * along;                                             // 경사를 따라 이동
             }
         }
@@ -260,6 +282,19 @@ public class PlayerController : MonoBehaviour
             _jumpCut = false;
             _apexTimer = 0f;
             JumpCount++;
+            OnJumped();
+        }
+
+        // ---- 초록 바운스: 착지 스텝에 상승 속도 부여 (점프 카운트·쿨다운 무관, 키 떼기 컷 없음)
+        bool bounced = false;
+        if (_pendingBounce > 0f)
+        {
+            v.y = Mathf.Max(v.y, JumpSpeed * _pendingBounce);
+            _jumpPressedTime = float.NegativeInfinity;
+            _lastGroundedTime = float.NegativeInfinity;   // 코요테 점프로 바운스 속도를 덮어쓰지 않게
+            _jumping = false; _jumpCut = false; _apexTimer = 0f;
+            _bouncing = true;
+            bounced = true;
             OnJumped();
         }
 
@@ -291,7 +326,7 @@ public class PlayerController : MonoBehaviour
         _lastFallSpeed = -v.y;
 
         _rb.linearVelocity = v;
-        ApplyMaterial(IsGrounded && idle && !doJump);
+        ApplyMaterial(IsGrounded && idle && !doJump && !bounced);
 
         // ---- 보정 (속도 확정 후 위치 미세 조정)
         if (v.y > 0f && CornerCorrection > 0f) TryCornerCorrection(v.y * dt);
@@ -315,18 +350,47 @@ public class PlayerController : MonoBehaviour
         int n = Physics2D.BoxCast(origin, size, 0f, Vector2.down, _groundFilter, _hits, GroundCheckDistance);
 
         var sum = Vector2.zero; int count = 0;
+        Collider2D nearest = null; float nearestDist = float.PositiveInfinity;
         for (int i = 0; i < n; i++)
         {
             var h = _hits[i];
             if (h.collider == _col || h.collider.attachedRigidbody == _rb) continue;
             if (h.normal.sqrMagnitude < 0.5f) continue;
             sum += h.normal; count++;
+            if (h.distance < nearestDist) { nearestDist = h.distance; nearest = h.collider; }
         }
         IsGrounded = count > 0;
         GroundNormal = count > 0 ? sum.normalized : Vector2.up;
 
-        // 점프로 떠오르는 첫 스텝들은 발이 아직 지면 근처라 "지면"으로 잡힌다 → 상승 중에는 무시 (경사 오르막은 _jumping 이 false 라 영향 없음)
-        if (_jumping && _rb.linearVelocity.y > 0f) { IsGrounded = false; GroundNormal = Vector2.up; }
+        // 점프·바운스로 떠오르는 첫 스텝들은 발이 아직 지면 근처라 "지면"으로 잡힌다 → 상승 중에는 무시 (경사 오르막은 _jumping 이 false 라 영향 없음)
+        if ((_jumping || _bouncing) && _rb.linearVelocity.y > 0f) { IsGrounded = false; GroundNormal = Vector2.up; nearest = null; }
+
+        SetGroundCollider(nearest);
+    }
+
+    /// <summary>발밑 콜라이더가 바뀌면 색상 기능 컴포넌트(얼음·바운스)를 다시 읽고, 얼음 마찰을 정지 재질에 반영한다.</summary>
+    void SetGroundCollider(Collider2D ground)
+    {
+        _groundChanged = ground != _groundCollider;
+        if (_groundChanged)
+        {
+            _groundCollider = ground;
+            _surface = ground != null ? ground.GetComponent<SurfaceModifier>() : null;
+            _groundBounce = ground != null ? ground.GetComponent<BounceStroke>() : null;
+        }
+        // 마찰은 매 스텝 비교 — RefreshMaterials(뜻)가 IdleFriction 을 다시 써도 얼음 배율이 유지된다
+        float friction = EffectiveIdleFriction;
+        if (!Mathf.Approximately(_matIdle.friction, friction))
+        {
+            _matIdle.friction = friction;
+            if (_idleMaterialApplied) _col.sharedMaterial = _matIdle;
+        }
+    }
+
+    /// <summary>빨강 위험 구역 접촉 → HazardTouched (리스폰 자체는 PlaySession 담당).</summary>
+    void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.collider != null && collision.collider.TryGetComponent<HazardStroke>(out _)) HazardTouched?.Invoke();
     }
 
     /// <summary>상승 중 머리가 모서리에 걸리면 (CornerCorrection 이내) 옆으로 밀어 속도 손실 없이 넘어간다.</summary>
@@ -441,6 +505,7 @@ public class PlayerController : MonoBehaviour
         _jumpPressedTime = float.NegativeInfinity;
         _lastGroundedTime = float.NegativeInfinity;
         _jumping = false; _jumpCut = false; _apexTimer = 0f;
+        _bouncing = false; _pendingBounce = 0f; SetGroundCollider(null);
         _lastFallSpeed = 0f; _wasGrounded = false;
         _squash = Vector2.one; _squashTimer = 0f;
         if (_visual != null) { _visual.localScale = new Vector3(_bodySize.x, _bodySize.y, 1f); _visual.localPosition = Vector3.zero; }
