@@ -52,6 +52,7 @@
 
 | 날짜 | 변경 |
 |---|---|
+| 2026-09-06 | **플레이 HUD 정리·연출** (`Scripts/Play/PlayHud.cs` 신규, `PlaySession.cs`·`PlayBootstrap.cs`): 에디터 HUD 와 같은 테마·패널 스프라이트로 좌상단 라운드/모드 배지, 중앙 뜻·시도 표시, 우상단 남은 시간 링 + 기권/복귀 버튼, 하단 조작 안내. 클리어 팝+플래시, 사망 비네트+흔들림, 10초 이하 경고색+틱음. 테마 에셋·이미지는 에디터에서 AssetDatabase 로 읽고 빌드는 색 상수·절차 생성 스프라이트로 폴백 (202 8장 갱신) |
 | 2026-09-06 | **맵 에디터 HUD 시안 구현** (`Prefabs/UI/MapEditorHud.prefab`, `Scripts/MapEditor/MapEditorHud.cs`·`HudToolButton.cs`·`MapEditorTheme.cs`·`MapEditorHudBuilder.cs`, `UI/MapEditorTheme.asset`, `Assets/image/` 에셋 52장): 라운드·안내문·타이머 링 / 도구 패널 / 굵기·색상 / 상태 칩 / 검증·완료. 종이 프레임이 맵 사각형을 따라가도록 카메라 맞춤 일반화(`CanvasView.FitCamera(Rect)`). 메뉴 [Chojiilgwan > Build MapEditor HUD] 로 재생성. 그리기 타이머는 표시만 (203·204 갱신) |
 | 2026-09-05 | Unity 6000.0.66f2·신 Input System으로 환경 확정. 조작키(A/D·←/→, W/↑, R) 확정. 방 설정에 **플레이 시간 제한** 추가(검증·교환 공용). 낙하 자동 리스폰(시도 미소모)·R키 리스폰(시도 +1)·리스폰 시 뜻 카운터 초기화. 캔버스 경계(바닥·왼쪽 벽 고정, 천장·오른쪽 개방). 골 자동 배치 삭제(직접 배치 필수). 뜻 선택 방식(목록/랜덤 후보, 뜻 없음 불가). 미클리어 기록 = PlayTimeLimit(제안). 닉네임 필드 추가 |
 | 2026-09-06 | **뜻 시스템 1차** (`Scripts/Common/Vows.cs`): 8종(저속·저점프·고중력·점프 쿨다운·점프 5회·공중 제어 금지·큰 몸집·미끄러운 발), 라운드마다 후보 중 선택 → 교환 → 검증은 상대 뜻·교환 플레이는 내 뜻 적용, 에디터에 상대 뜻 표시. 그리기 시간 만료 = 제출 실패(라운드 패배). 방 나가기 버튼 재배치 |

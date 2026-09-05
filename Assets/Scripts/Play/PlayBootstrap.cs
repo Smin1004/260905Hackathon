@@ -33,8 +33,9 @@ public class PlayBootstrap : MonoBehaviour
             es.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
         }
         cam.clearFlags = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.16f, 0.17f, 0.2f);
-        CanvasView.FitCamera(cam, 0.08f, 0f);   // 상단 HUD 바만 비워 둔다
+        PlayHud.Theme.Load();
+        cam.backgroundColor = PlayHud.Theme.Background;   // 에디터 HUD 와 같은 배경색 (MapEditorTheme.Background)
+        CanvasView.FitCamera(cam, 0.14f, 0.06f);   // 상단 HUD 바(183px)·하단 조작 안내를 비워 둔다
     }
 
     void Start()

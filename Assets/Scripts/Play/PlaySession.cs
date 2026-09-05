@@ -1,7 +1,6 @@
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.UI;
 
 /// <summary>한 번의 플레이(검증 또는 교환) 결과.</summary>
 public class PlayResult
@@ -45,9 +44,8 @@ public class PlaySession : MonoBehaviour
     /// <summary>플레이어가 중단 (ESC / 버튼).</summary>
     public event Action Aborted;
 
-    Canvas _hud;
-    Text _hudText, _resultText;
-    Button _abortBtn;
+    /// <summary>HUD (표시·연출은 PlayHud 가 담당 — 여기서는 생성·갱신 호출만)</summary>
+    PlayHud _hud;
     bool _ending;
     bool _respawning;
 
@@ -74,7 +72,7 @@ public class PlaySession : MonoBehaviour
     /// <summary>Begin 이후에 AbortLabel 을 바꾼 경우 HUD 버튼에 반영.</summary>
     public void RefreshAbortLabel()
     {
-        if (_abortBtn != null) { var t = _abortBtn.GetComponentInChildren<Text>(); if (t != null) t.text = AbortLabel; }
+        if (_hud != null) _hud.SetAbortLabel(AbortLabel);
     }
 
     void Setup(MapData map)
@@ -133,6 +131,7 @@ public class PlaySession : MonoBehaviour
         Player.Freeze();
         Player.Body.simulated = false;
         Player.PlayDeathFeedback();
+        if (_hud != null) _hud.PlayDeathEffect();   // 화면 연출 (비네트 + 흔들림) — 규칙과 무관
         yield return new WaitForSeconds(RespawnDelay);
         if (Player != null)
         {
@@ -154,12 +153,7 @@ public class PlaySession : MonoBehaviour
         IsFinished = true;
         Cleared = cleared;
         if (Player != null) Player.Freeze();
-        if (_resultText != null)
-        {
-            _resultText.gameObject.SetActive(true);
-            _resultText.color = cleared ? new Color(0.4f, 1f, 0.5f) : new Color(1f, 0.5f, 0.4f);
-            _resultText.text = cleared ? $"클리어!  {Elapsed:0.00}초  (시도 {Attempts})" : $"미클리어 — {reason}  (시도 {Attempts})";
-        }
+        ShowResult(cleared, reason);
         UpdateHud();
         Completed?.Invoke(new PlayResult { Cleared = cleared, ClearTime = Elapsed, Attempts = Attempts, GaveUp = gaveUp });
     }
@@ -191,31 +185,25 @@ public class PlaySession : MonoBehaviour
         if (_hud != null) Destroy(_hud.gameObject);
     }
 
-    // ------------------------------------------------------------------ HUD (플레이스홀더 — Docs/204 2.3)
+    // ------------------------------------------------------------------ HUD (Docs/204 2.3 — 구성·연출은 PlayHud.cs)
 
     void BuildHud()
     {
-        _hud = RuntimeUI.Canvas("Play HUD (runtime)", 200, gameObject);
-        var root = _hud.transform;
-
-        var top = RuntimeUI.Panel(root, new Vector2(0f, 0.92f), new Vector2(1f, 1f), new Color(0.05f, 0.05f, 0.08f, 0.85f));
-        _hudText = RuntimeUI.Label(top, new Vector2(0.01f, 0f), new Vector2(0.78f, 1f), "", 24, TextAnchor.MiddleLeft, Color.white);
-        _abortBtn = RuntimeUI.Button(top, new Vector2(0.80f, 0.12f), new Vector2(0.99f, 0.88f), AbortLabel, Abort, new Color(0.75f, 0.35f, 0.3f));
-
-        _resultText = RuntimeUI.Label(root, new Vector2(0.2f, 0.42f), new Vector2(0.8f, 0.58f), "", 64, TextAnchor.MiddleCenter, new Color(0.4f, 1f, 0.5f), FontStyle.Bold);
-        _resultText.gameObject.SetActive(false);
-
-        UpdateHud();
+        _hud = PlayHud.Create(this);
     }
 
     void UpdateHud()
     {
-        if (_hudText == null) return;
-        string time = TimeLimit > 0f ? $"⏱ 남은 {Mathf.Max(0f, TimeLimit - Elapsed):0.0}s" : $"⏱ {Elapsed:0.0}s";
-        string tries = AttemptLimit > 0 ? $"시도 {Attempts}/{AttemptLimit}" : $"시도 {Attempts}";
-        string esc = AbortMeansGiveUp ? "ESC 기권" : "ESC 에디터로";
-        string vow = Vows.Count > 0 ? "   |   " + VowCatalog.HudLine(Vows, Player, this) : "";
-        _hudText.text = $"{Title}   {time}   {tries}{vow}   |   이동 A/D·←/→   점프 W·↑   S·↓ 빠른 낙하   R 리스폰   {esc}" +
-                        (IsFinished ? (AbortMeansGiveUp ? "   |   종료 — 상대 결과 대기" : "   |   클리어 — 잠시 후 에디터로 돌아갑니다") : "");
+        if (_hud != null) _hud.Refresh();
+    }
+
+    /// <summary>종료 결과 카드. 클리어 = 팝 + 플래시, 미클리어 = 팝 + 붉은 비네트.</summary>
+    void ShowResult(bool cleared, string reason)
+    {
+        if (_hud == null) return;
+        string main = cleared ? $"클리어!  {Elapsed:0.00}초" : $"미클리어 — {reason}";
+        string tries = $"시도 {Attempts}";
+        string next = AbortMeansGiveUp ? "상대 결과를 기다리는 중" : (cleared ? "잠시 후 에디터로 돌아갑니다" : "ESC 로 에디터로 돌아갑니다");
+        _hud.ShowResult(cleared, main, tries + "   ·   " + next);
     }
 }
