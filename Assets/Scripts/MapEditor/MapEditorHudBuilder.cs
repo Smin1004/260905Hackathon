@@ -232,13 +232,13 @@ public static class MapEditorHudBuilder
         // ---- 도구 패널 (오른쪽 열)
         Sprite toolN = S("buttons/btn_tool_normal"), toolA = S("buttons/btn_tool_active"), toolD = S("buttons/btn_tool_disabled"), toolGoal = S("buttons/btn_tool_active_goal");
         var toolPanel = Img("ToolPanel", hc, S("panels/panel_dark"), Color.white, Image.Type.Sliced, 2.5f);
-        const float btnH = 100f, btnGap = 8f, pad = 14f;   // (QA) 버튼 확대
+        const float btnH = 84f, btnGap = 7f, pad = 14f;   // 7개 버튼이 기존 열 높이(≈686px) 안에 들어가도록 (시작 배치 추가)
         float y = -pad;
         var pen = ToolButton(toolPanel.transform, "Btn_Pen", y, S("icons/icon_pen"), "펜", toolN, toolA, toolD, t); y -= btnH + btnGap;
         var eraser = ToolButton(toolPanel.transform, "Btn_Eraser", y, null, "지우개", toolN, toolA, toolD, t); y -= btnH + btnGap;
         // 지우개 아이콘 에셋이 없어 기본 스프라이트(UISprite)를 기울인 블록으로 대신한다
         var eraserIcon = Img("Icon", eraser.transform, Builtin("UISprite.psd"), Color.white, Image.Type.Sliced);
-        eraserIcon.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 14), new Vector2(44, 26));
+        eraserIcon.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 11), new Vector2(38, 22));
         eraserIcon.rectTransform.localRotation = Quaternion.Euler(0, 0, -30);
         eraserIcon.raycastTarget = false;
         eraser.Icon = eraserIcon;
@@ -251,6 +251,9 @@ public static class MapEditorHudBuilder
         divider.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, y + 2), new Vector2(140, 14));
         divider.raycastTarget = false;
         y -= 14 + 4;
+        // 시작 배치 — 민트(시작점 색) 아이콘·라벨, 선택 시 흰 배경
+        var start = ToolButton(toolPanel.transform, "Btn_Start", y, S("markers/marker_start"), "시작 배치", toolN, toolA, toolD, t); y -= btnH + btnGap;
+        start.ContentNormal = t.Mint;
         // (QA) 골 배치는 다른 도구와 구분 — 평상시에도 코랄(경고) 색 아이콘·라벨, 선택 시 코랄 배경
         var goal = ToolButton(toolPanel.transform, "Btn_Goal", y, S("icons/icon_flag"), "골 배치", toolN, toolGoal, toolD, t); y -= btnH;
         goal.ContentNormal = t.Warning;
@@ -336,6 +339,7 @@ public static class MapEditorHudBuilder
         so.FindProperty("redoButton").objectReferenceValue = redo;
         so.FindProperty("clearButton").objectReferenceValue = clear;
         so.FindProperty("goalButton").objectReferenceValue = goal;
+        so.FindProperty("startButton").objectReferenceValue = start;
         var wp = so.FindProperty("widthButtons"); wp.arraySize = widthBtns.Length;
         for (int i = 0; i < widthBtns.Length; i++) wp.GetArrayElementAtIndex(i).objectReferenceValue = widthBtns[i];
         so.FindProperty("swatchRoot").objectReferenceValue = swatchRoot;
@@ -443,7 +447,7 @@ public static class MapEditorHudBuilder
     static HudToolButton ToolButton(Transform parent, string name, float y, Sprite icon, string label, Sprite normal, Sprite active, Sprite disabled, MapEditorTheme t)
     {
         var bg = Img(name, parent, normal, Color.white, Image.Type.Sliced, 2.8f);
-        bg.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(140, 100));
+        bg.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(140, 84));
         var btn = bg.gameObject.AddComponent<Button>();
         btn.targetGraphic = bg;
         Tint(btn);
@@ -454,13 +458,13 @@ public static class MapEditorHudBuilder
         if (icon != null)
         {
             var ic = Img("Icon", bg.transform, icon, Color.white, Image.Type.Simple);
-            ic.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 14), new Vector2(44, 44));
+            ic.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 11), new Vector2(38, 38));
             ic.raycastTarget = false;
             tb.Icon = ic;
         }
-        var lb = Txt("Label", bg.transform, label, 18, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+        var lb = Txt("Label", bg.transform, label, 16, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
         lb.rectTransform.anchorMin = new Vector2(0, 0); lb.rectTransform.anchorMax = new Vector2(1, 0); lb.rectTransform.pivot = new Vector2(0.5f, 0);
-        lb.rectTransform.anchoredPosition = new Vector2(0, 10); lb.rectTransform.sizeDelta = new Vector2(0, 22);
+        lb.rectTransform.anchoredPosition = new Vector2(0, 7); lb.rectTransform.sizeDelta = new Vector2(0, 20);
         tb.Label = lb;
         return tb;
     }

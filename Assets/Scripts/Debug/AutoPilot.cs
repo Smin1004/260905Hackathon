@@ -105,6 +105,7 @@ public class AutoPilot : MonoBehaviour
                 ed.SetWidthIndex(2); ed.SetColorId(3); ed.AddStroke(pts);
                 ed.SetWidthIndex(1); ed.SetColorId(0); ed.AddStroke(new System.Collections.Generic.List<Vector2> { new Vector2(16f, 0f), new Vector2(16f, 3f) });
                 for (int r = 1; r < round; r++) ed.AddStroke(new System.Collections.Generic.List<Vector2> { new Vector2(18f + r, 4f), new Vector2(18.5f + r, 6f) });
+                ed.SetStart(new Vector2(1.5f, 0.65f));
                 ed.SetGoal(new Vector2(22f, 1f));
             }
             else
@@ -114,6 +115,7 @@ public class AutoPilot : MonoBehaviour
                 ed.SetWidthIndex(1); ed.SetColorId(4); ed.AddStroke(new System.Collections.Generic.List<Vector2> { new Vector2(10f, 0f), new Vector2(12f, 2f), new Vector2(14f, 0f) });
                 ed.SetWidthIndex(2); ed.SetColorId(1); ed.AddStroke(new System.Collections.Generic.List<Vector2> { new Vector2(20f, 6f), new Vector2(26f, 6f) });
                 for (int r = 1; r < round; r++) ed.AddStroke(new System.Collections.Generic.List<Vector2> { new Vector2(2f + r, 8f), new Vector2(2.5f + r, 9f) });
+                ed.SetStart(new Vector2(1.5f, 0.65f));
                 ed.SetGoal(new Vector2(27f, 2f));
             }
             Log($"[R{round}] 맵 제작: 스트로크 {ed.Map.Strokes.Count}, 점 {ed.Map.TotalPoints}");

@@ -51,6 +51,7 @@ public class MapEditorHud : MonoBehaviour
     [SerializeField] HudToolButton redoButton;
     [SerializeField] HudToolButton clearButton;
     [SerializeField] HudToolButton goalButton;
+    [SerializeField] HudToolButton startButton;
     [SerializeField] HudToolButton[] widthButtons;
 
     [Header("색상 팔레트")]
@@ -129,6 +130,7 @@ public class MapEditorHud : MonoBehaviour
         Hook(redoButton, () => _c.Redo());
         Hook(clearButton, () => _c.ClearAll());
         Hook(goalButton, () => _c.SetTool(EditorTool.Goal));
+        Hook(startButton, () => _c.SetTool(EditorTool.Start));
         if (widthButtons != null)
             for (int i = 0; i < widthButtons.Length; i++) { int idx = i; Hook(widthButtons[i], () => _c.SetWidthIndex(idx)); }
         Hook(verifyButton, () => _c.StartVerification());
@@ -185,9 +187,10 @@ public class MapEditorHud : MonoBehaviour
         Apply(penButton, _c.Tool == EditorTool.Pen, editable);
         Apply(eraserButton, _c.Tool == EditorTool.Eraser, editable);
         Apply(goalButton, _c.Tool == EditorTool.Goal, editable);
+        Apply(startButton, _c.Tool == EditorTool.Start, editable);
         Apply(undoButton, false, editable && _c.CanUndo);
         Apply(redoButton, false, editable && _c.CanRedo);
-        Apply(clearButton, false, editable && (_c.Map.Strokes.Count > 0 || _c.Map.HasGoal));
+        Apply(clearButton, false, editable && (_c.Map.Strokes.Count > 0 || _c.Map.HasGoal || _c.Map.HasStart));
 
         if (widthButtons != null)
             for (int i = 0; i < widthButtons.Length; i++) Apply(widthButtons[i], i == _c.WidthIndex, editable);
@@ -213,9 +216,10 @@ public class MapEditorHud : MonoBehaviour
         if (_c.Locked) { sub = "제출 완료"; title = "상대가 맵을 완성할 때까지 기다리는 중"; }
         else if (_c.InVerification) { sub = "검증 플레이"; title = "시작점에서 골까지 도달하면 검증 성공"; }
         else if (_c.Tool == EditorTool.Goal) { sub = "골 배치"; title = "캔버스를 클릭해 골을 배치하세요"; subColor = Theme != null ? Theme.Warning : Color.red; }
+        else if (_c.Tool == EditorTool.Start) { sub = "시작 배치"; title = "캔버스를 클릭해 시작 위치를 배치하세요"; subColor = Theme != null ? Theme.Mint : Color.cyan; }
         else if (_c.Tool == EditorTool.Eraser) { sub = "지우개"; title = "드래그한 부분의 선이 지워집니다"; }
         else if (_c.IsVerified) { sub = "검증 클리어!"; title = "제출을 누르면 맵이 상대에게 전송됩니다"; }
-        else if (!_c.Map.HasGoal && _c.Map.Strokes.Count > 0) { sub = "지금은, 그릴 시간!"; title = "골을 배치해야 검증할 수 있습니다"; }
+        else if ((!_c.Map.HasGoal || !_c.Map.HasStart) && _c.Map.Strokes.Count > 0) { sub = "지금은, 그릴 시간!"; title = !_c.Map.HasStart ? "시작 위치와 골을 배치해야 검증할 수 있습니다" : "골을 배치해야 검증할 수 있습니다"; }
         else { sub = "지금은, 그릴 시간!"; title = "시작점에서 골까지 경로를 그려보세요"; }
         if (subtitleText != null) { subtitleText.text = sub; subtitleText.color = subColor; }
         if (titleText != null) titleText.text = title;
@@ -232,7 +236,7 @@ public class MapEditorHud : MonoBehaviour
     {
         if (statsText == null) return;
         int raw = MapSerializer.EstimateRawBytes(_c.Map);
-        string goal = _c.Map.HasGoal ? "골 배치됨" : "골 미배치";
+        string goal = (_c.Map.HasStart ? "시작 배치됨" : "시작 미배치") + " · " + (_c.Map.HasGoal ? "골 배치됨" : "골 미배치");
         string verify = _c.IsVerified ? string.Format("검증 OK · 패타임 {0:0.00}s", _c.VerifiedParTime) : "검증 필요";
         statsText.text = string.Format("스트로크 {0}/{1} · 점 {2} · 약 {3:0.0} KB · {4} · {5}",
             _c.Map.Strokes.Count, MapConstants.MaxStrokes, _c.Map.TotalPoints, raw / 1024f, goal, verify);

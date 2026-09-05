@@ -411,6 +411,7 @@ public class NetService : MonoBehaviour
                 w.WriteValueSafe(Settings.PlayTimeLimit);
                 w.WriteValueSafe(Settings.VowPickCount);
                 w.WriteValueSafe(Settings.VowCandidateCount);
+                w.WriteValueSafe(Settings.VowPickIncrement);
             }
             w.WriteValueSafe(_helloReceived);   // ack: 나는 네 Hello 를 이미 받았다
             Send(MsgHello, w, NetworkDelivery.ReliableSequenced);
@@ -490,6 +491,7 @@ public class NetService : MonoBehaviour
         w.WriteValueSafe(s.PlayTimeLimit);
         w.WriteValueSafe(s.VowPickCount);
         w.WriteValueSafe(s.VowCandidateCount);
+        w.WriteValueSafe(s.VowPickIncrement);
     }
 
     static RoomSettings ReadSettings(FastBufferReader reader)
@@ -500,6 +502,7 @@ public class NetService : MonoBehaviour
         reader.ReadValueSafe(out s.PlayTimeLimit);
         reader.ReadValueSafe(out s.VowPickCount);
         reader.ReadValueSafe(out s.VowCandidateCount);
+        reader.ReadValueSafe(out s.VowPickIncrement);
         return s;
     }
 
@@ -601,6 +604,7 @@ public class NetService : MonoBehaviour
             reader.ReadValueSafe(out s.PlayTimeLimit);
             reader.ReadValueSafe(out s.VowPickCount);
             reader.ReadValueSafe(out s.VowCandidateCount);
+            reader.ReadValueSafe(out s.VowPickIncrement);
         }
         reader.ReadValueSafe(out bool acked);
 

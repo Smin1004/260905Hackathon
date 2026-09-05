@@ -29,11 +29,14 @@ public static class MapConstants
     /// <summary>지우개 반지름 프리셋 (u). 펜 굵기 인덱스와 짝을 맞춘다.</summary>
     public static readonly float[] EraserRadii = { 0.3f, 0.6f, 1.0f };
 
-    /// <summary>시작점 — 플레이어 중심 좌표. 바닥선(굵기 0.25 → 윗면 y=0.125) 위에 0.9u 캐릭터가 서 있는 위치. 고정, 편집 불가.</summary>
+    /// <summary>기본(폴백) 시작점 — 플레이어 중심 좌표. 바닥선(굵기 0.25 → 윗면 y=0.125) 위에 0.9u 캐릭터가 서 있는 위치.
+    /// 2026-09-06 부터 시작 위치는 제작자가 배치한다(MapData.StartPos) — 이 값은 시작이 없는 데모 맵·썸네일용 폴백.</summary>
     public static readonly Vector2 StartPos = new Vector2(1.5f, 0.65f);
+    /// <summary>시작 위치 배치 시 캔버스 안쪽으로 유지하는 여백 (몸 절반 + 경계 굵기)</summary>
+    public const float StartMarginX = 0.5f, StartMarginY = 0.6f;
     /// <summary>골 존 트리거 크기.</summary>
     public static readonly Vector2 GoalSize = new Vector2(1f, 1f);
-    /// <summary>골은 시작점에서 최소 이 거리만큼 떨어져야 한다 (패타임 0.2초짜리 날림 맵 방지 — Docs/100 7.2).</summary>
+    /// <summary>시작과 골은 이 거리 이상 떨어져야 한다 (패타임 0.2초짜리 날림 맵 방지 — Docs/100 7.2). 어느 쪽을 나중에 놓든 검사.</summary>
     public const float MinGoalDistanceFromStart = 3f;
 
     public const int MaxUndo = 50;
@@ -67,13 +70,16 @@ public class StrokeData
 [Serializable]
 public class MapData
 {
-    /// <summary>고정값이지만 명시 (수신측이 상수에 의존하지 않게).</summary>
-    public Vector2 StartPos = MapConstants.StartPos;
+    /// <summary>시작 위치(플레이어 중심) — 제작자가 배치. 미배치 = (-1,-1). 검증·제출에 필수.</summary>
+    public Vector2 StartPos = new Vector2(-1f, -1f);
     /// <summary>골 존 중심. 미배치 = (-1,-1).</summary>
     public Vector2 GoalPos = new Vector2(-1f, -1f);
     public List<StrokeData> Strokes = new List<StrokeData>();
 
     public bool HasGoal => GoalPos.x >= 0f && GoalPos.y >= 0f;
+    public bool HasStart => StartPos.x >= 0f && StartPos.y >= 0f;
+    /// <summary>플레이·썸네일용: 배치된 시작 위치, 없으면 기본 시작점</summary>
+    public Vector2 EffectiveStartPos => HasStart ? StartPos : MapConstants.StartPos;
 
     public int TotalPoints
     {

@@ -87,7 +87,7 @@ public class PlaySession : MonoBehaviour
         if (Loader.Goal != null) Loader.Goal.Reached += OnGoalReached;
         else Debug.LogWarning("[PlaySession] 골이 없는 맵 — 클리어 판정 불가");
 
-        Player = PlayerController.Spawn(map.StartPos, transform);
+        Player = PlayerController.Spawn(map.EffectiveStartPos, transform);
         Player.HazardTouched += OnHazardTouched;   // 빨강 위험 구역 (Docs/101 1장) — 시작점 리스폰, 시도 미소모
         VowCatalog.Apply(Vows, Player, this);   // 뜻은 스폰 직후 1회 적용 — 파라미터만 바꾸므로 리스폰에도 유지된다
         if (Vows.Count > 0) Debug.Log("[PlaySession] 뜻 적용: " + VowCatalog.NamesOf(Vows));
@@ -137,7 +137,7 @@ public class PlaySession : MonoBehaviour
         yield return new WaitForSeconds(RespawnDelay);
         if (Player != null)
         {
-            Player.Respawn(Map.StartPos);
+            Player.Respawn(Map.EffectiveStartPos);
             Player.Body.simulated = true;
             if (!IsFinished) Player.Unfreeze();
         }

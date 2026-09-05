@@ -40,7 +40,7 @@ public static class MapThumbnail
         raster.Line(new Vector2(0f, half), new Vector2(MapConstants.CanvasWidth, half), BoundaryWidth, BoundaryColor);
         raster.Line(new Vector2(half, 0f), new Vector2(half, MapConstants.CanvasHeight), BoundaryWidth, BoundaryColor);
 
-        Vector2 startPos = map != null ? map.StartPos : MapConstants.StartPos;
+        Vector2 startPos = map != null ? map.EffectiveStartPos : MapConstants.StartPos;
 
         if (map != null && map.Strokes != null)
         {

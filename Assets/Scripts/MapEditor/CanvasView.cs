@@ -14,6 +14,7 @@ public class CanvasView : MonoBehaviour
 
     Transform _root;
     Transform _goalMarker;
+    Transform _startMarker;
     MapLoader _boundaries;
     MapEditorTheme _theme;
 
@@ -49,8 +50,9 @@ public class CanvasView : MonoBehaviour
         _boundaries.BuildGoal = false;
         _boundaries.Load(new MapData());
 
-        // 시작점 마커 (고정)
-        RuntimeSprites.MakeSquare("Start Marker", _root, MapConstants.StartPos, new Vector2(0.8f, 0.9f), StartColor, 4);
+        // 시작 마커 (배치 전 숨김)
+        _startMarker = RuntimeSprites.MakeSquare("Start Marker", _root, MapConstants.StartPos, new Vector2(0.8f, 0.9f), StartColor, 4).transform;
+        _startMarker.gameObject.SetActive(false);
 
         // 골 마커 (배치 전 숨김)
         var goal = RuntimeSprites.MakeSquare("Goal Marker", _root, Vector2.zero, MapConstants.GoalSize, GoalColor, 4);
@@ -63,7 +65,7 @@ public class CanvasView : MonoBehaviour
     /// 상대 맵을 플레이할 때 배경이 검어 선이 안 보이던 문제 — 에디터·검증과 같은 종이 위에서 플레이한다.
     /// theme 이 없으면 단색 종이만 깐다.
     /// </summary>
-    public static Transform BuildPlayBackdrop(Transform parent, MapEditorTheme theme)
+    public static Transform BuildPlayBackdrop(Transform parent, MapEditorTheme theme, Vector2 startPos)
     {
         var root = new GameObject("Play Backdrop").transform;
         root.SetParent(parent, false);
@@ -74,7 +76,7 @@ public class CanvasView : MonoBehaviour
             return root;
         }
         BuildPaper(root, theme, w, h);
-        BuildStartMarker(root, theme);
+        BuildStartMarker(root, theme).position = new Vector3(startPos.x, startPos.y, 0f);
         return root;
     }
 
@@ -109,7 +111,8 @@ public class CanvasView : MonoBehaviour
         Line(_root, new Vector2(w, cap), new Vector2(w, h - cap), t.BoundaryWidth, t.BoundaryColor, -5);
         Line(_root, new Vector2(cap, h), new Vector2(w - cap, h), t.BoundaryWidth, t.BoundaryColor, -5);
 
-        BuildStartMarker(_root, t);
+        _startMarker = BuildStartMarker(_root, t);
+        _startMarker.gameObject.SetActive(false);   // 배치 전 숨김
 
         // 골: 펄스 + 마커 (배치 전 숨김)
         var goalRoot = new GameObject("Goal Marker").transform;
@@ -121,7 +124,7 @@ public class CanvasView : MonoBehaviour
     }
 
     /// <summary>시작점: 펄스 + 마커 + START 라벨</summary>
-    static void BuildStartMarker(Transform root, MapEditorTheme t)
+    static Transform BuildStartMarker(Transform root, MapEditorTheme t)
     {
         var startRoot = new GameObject("Start Marker").transform;
         startRoot.SetParent(root, false);
@@ -142,6 +145,15 @@ public class CanvasView : MonoBehaviour
         var tmr = label.GetComponent<MeshRenderer>();
         tmr.sortingOrder = 4;
         tmr.sharedMaterial = RuntimeUI.Font.material;
+        return startRoot;
+    }
+
+    /// <summary>시작 마커를 맵의 시작 위치로 (미배치면 숨김)</summary>
+    public void SetStart(MapData map)
+    {
+        if (_startMarker == null) return;
+        _startMarker.gameObject.SetActive(map.HasStart);
+        if (map.HasStart) _startMarker.position = new Vector3(map.StartPos.x, map.StartPos.y, 0f);
     }
 
     static void Marker(Transform parent, Sprite sprite, float diameter, int order)

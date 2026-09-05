@@ -36,7 +36,6 @@ public class PlayBootstrap : MonoBehaviour
         PlayHud.Theme.Load();
         cam.backgroundColor = PlayHud.Theme.Background;   // 에디터 HUD 와 같은 배경색 (MapEditorTheme.Background)
         CanvasView.FitCamera(cam, 0.14f, 0.06f);   // 상단 HUD 바(183px)·하단 조작 안내를 비워 둔다
-        CanvasView.BuildPlayBackdrop(transform, MapEditorTheme.LoadOrNull());   // (QA) 에디터와 같은 종이 배경 — 검은 배경에서 선이 안 보이던 문제
     }
 
     void Start()
@@ -50,6 +49,7 @@ public class PlayBootstrap : MonoBehaviour
             title = "교환 플레이 (데모 맵 — 상대 맵 없음)";
         }
         else title = $"교환 플레이 — {data.OpponentNickname}의 맵";
+        CanvasView.BuildPlayBackdrop(transform, MapEditorTheme.LoadOrNull(), map.EffectiveStartPos);   // 에디터와 같은 종이 배경 + 맵의 시작 마커
 
         Session = PlaySession.Begin(map, title, transform, data.MyVows);   // 교환 플레이 = 자기 뜻 (Docs/100 4.2)
         Session.TimeLimit = data.Settings.PlayTimeLimit;

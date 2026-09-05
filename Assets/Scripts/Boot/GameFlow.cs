@@ -33,7 +33,18 @@ public class GameFlow : MonoBehaviour
     /// <summary>이번 라운드에 제시된 뜻 후보 (VowSelect 상태에서 유효)</summary>
     public System.Collections.Generic.List<VowDef> VowCandidates { get; private set; } = new System.Collections.Generic.List<VowDef>();
     /// <summary>골라야 하는 뜻 개수 (방 설정)</summary>
-    public int VowPickCount => Mathf.Max(1, _data != null ? _data.Settings.VowPickCount : 1);
+    /// <summary>이 라운드에 고르는 뜻 개수 = 설정값 (+ 라운드−1, '라운드마다 뜻 +1' ON). 후보 수·전체 뜻 수를 넘지 않는다.</summary>
+    public int VowPickCount
+    {
+        get
+        {
+            if (_data == null) return 1;
+            var s = _data.Settings;
+            int n = s.VowPickCount + (s.VowPickIncrement ? Mathf.Max(0, Round - 1) : 0);
+            int cap = s.VowCandidateCount > 0 ? Mathf.Min(s.VowCandidateCount, VowCatalog.All.Count) : VowCatalog.All.Count;
+            return Mathf.Clamp(n, 1, Mathf.Max(1, cap));
+        }
+    }
     /// <summary>방 설정의 그리기 시간 제한 (초). 0 이면 없음</summary>
     public float DrawTimeLimit => _data != null ? _data.Settings.DrawTimeLimit : 0f;
     /// <summary>이번 라운드 그리기 남은 시간 (초). 타이머가 없으면 -1. MapEditorHud 가 표시에 사용</summary>
@@ -939,6 +950,7 @@ public class GameFlow : MonoBehaviour
     static readonly int[] PlayTimeOptions = { 120, 180, 300 };
     static readonly int[] PickOptions = { 1, 2, 3 };
     static readonly int[] CandidateOptions = { 3, 5, 8, 0 };
+    static readonly int[] ToggleOptions = { 0, 1 };
 
     void BuildRoomPanel(Transform root)
     {
@@ -954,7 +966,7 @@ public class GameFlow : MonoBehaviour
         _roomHostText = RuntimeUI.Label(players, new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.68f), "", 26, TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
         _roomGuestText = RuntimeUI.Label(players, new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.36f), "", 26, TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
 
-        // 방 설정 5종 (Docs/100 7.1) — 호스트만 조작, 참가자는 표시만
+        // 방 설정 6종 (Docs/100 7.1) — 호스트만 조작, 참가자는 표시만
         var settings = RuntimeUI.Panel(rp, new Vector2(0.50f, 0.30f), new Vector2(0.92f, 0.77f), new Color(0.14f, 0.16f, 0.21f));
         RuntimeUI.Label(settings, new Vector2(0.05f, 0.88f), new Vector2(0.95f, 0.98f), "방 설정", 20, TextAnchor.MiddleLeft, Color.gray);
         _settingRows.Clear();
@@ -963,6 +975,7 @@ public class GameFlow : MonoBehaviour
         AddSettingRow(settings, 2, "플레이 시간", () => PlayTimeOptions, () => _data.Settings.PlayTimeLimit, v => _data.Settings.PlayTimeLimit = v, v => $"{v / 60}분");
         AddSettingRow(settings, 3, "뜻 개수", () => PickOptions, () => _data.Settings.VowPickCount, v => _data.Settings.VowPickCount = v, v => $"{v}개");
         AddSettingRow(settings, 4, "뜻 후보 수", () => CandidateOptions, () => _data.Settings.VowCandidateCount, v => _data.Settings.VowCandidateCount = v, v => v == 0 ? "전체" : $"{v}개");
+        AddSettingRow(settings, 5, "라운드마다 뜻 +1", () => ToggleOptions, () => _data.Settings.VowPickIncrement ? 1 : 0, v => _data.Settings.VowPickIncrement = v == 1, v => v == 1 ? "ON" : "OFF");
         _roomHint = RuntimeUI.Label(rp, new Vector2(0.08f, 0.30f), new Vector2(0.46f, 0.60f), "", 20, TextAnchor.UpperLeft, new Color(0.75f, 0.78f, 0.85f));
 
         _roomStatus = RuntimeUI.Label(rp, new Vector2(0.08f, 0.20f), new Vector2(0.92f, 0.28f), "", 22, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.55f));
@@ -973,7 +986,7 @@ public class GameFlow : MonoBehaviour
 
     void AddSettingRow(Transform parent, int index, string name, Func<int[]> options, Func<int> get, Action<int> set, Func<int, string> format)
     {
-        float top = 0.84f - index * 0.155f, bottom = top - 0.13f;
+        float top = 0.86f - index * 0.135f, bottom = top - 0.115f;   // 6행
         RuntimeUI.Label(parent, new Vector2(0.05f, bottom), new Vector2(0.45f, top), name, 24, TextAnchor.MiddleLeft, Color.white);
         var row = new SettingRow { Name = name, Options = options, Get = get, Set = set, Format = format };
         row.Prev = RuntimeUI.Button(parent, new Vector2(0.50f, bottom + 0.015f), new Vector2(0.58f, top - 0.015f), "<", () => CycleSetting(row, -1), new Color(0.25f, 0.30f, 0.40f), 22);
@@ -1023,7 +1036,7 @@ public class GameFlow : MonoBehaviour
             r.Prev.gameObject.SetActive(host); r.Next.gameObject.SetActive(host);
         }
         _roomHint.text = host
-            ? "설정은 방장만 바꿀 수 있고 참가자 화면에 바로 반영됩니다.\n\n• 시도 제한·플레이 시간: 교환 플레이에만 적용\n• 그리기 시간: 검증 플레이까지 포함한 라운드 제작 시간\n• 뜻 개수·후보 수: 라운드마다 각자 고르는 뜻"
+            ? "설정은 방장만 바꿀 수 있고 참가자 화면에 바로 반영됩니다.\n\n• 시도 제한·플레이 시간: 교환 플레이에만 적용\n• 그리기 시간: 검증 플레이까지 포함한 라운드 제작 시간\n• 뜻 개수·후보 수: 라운드마다 각자 고르는 뜻\n• 라운드마다 뜻 +1: 2라운드 2개, 3라운드 3개… (후보 수까지)"
             : "방장이 설정을 정하고 [게임 시작]을 누르면 뜻 선택으로 넘어갑니다.\n\n• 시도 제한·플레이 시간: 교환 플레이에만 적용\n• 그리기 시간: 검증 플레이까지 포함한 라운드 제작 시간";
         _startBtn.gameObject.SetActive(host);
         _startBtn.interactable = host && opp && State == MatchState.RoomLobby;

@@ -6,7 +6,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 
-public enum EditorTool { Pen, Eraser, Goal }
+public enum EditorTool { Pen, Eraser, Goal, Start }
 
 /// <summary>
 /// 맵 에디터 상태 머신 (MapEditor 씬). Docs/203 1·3·6장.
@@ -50,7 +50,7 @@ public class MapEditorController : MonoBehaviour
     public PlaySession Session => _session;
     /// <summary>검증 버튼은 편집 가능한 동안 항상 눌 수 있다 (QA). 골·선이 없으면 StartVerification 이 상태 문구로 이유를 알린다. 비활성은 제출 버튼만.</summary>
     public bool CanVerify => !InVerification && !Locked;
-    public bool CanComplete => IsVerified && Map.HasGoal && Map.Strokes.Count > 0 && !InVerification && !Locked;
+    public bool CanComplete => IsVerified && Map.HasStart && Map.HasGoal && Map.Strokes.Count > 0 && !InVerification && !Locked;
 
     /// <summary>제출 후 잠금 — 입력·UI 차단 (GameFlow 가 상대 대기 중 설정). Docs/100 6장 "제출 후 수정 불가".</summary>
     public bool Locked { get; private set; }
@@ -168,7 +168,7 @@ public class MapEditorController : MonoBehaviour
     /// <summary>자동 테스트 전용: 검증 플레이 없이 검증 성공 상태로 만든다. 릴리즈 빌드에는 포함되지 않는다.</summary>
     public void DebugForceVerified(float parTime)
     {
-        if (!Map.HasGoal || Map.Strokes.Count == 0) return;
+        if (!Map.HasStart || !Map.HasGoal || Map.Strokes.Count == 0) return;
         IsVerified = true;
         VerifiedParTime = parTime;
         MatchData.Instance.MyParTime = parTime;
@@ -260,6 +260,10 @@ public class MapEditorController : MonoBehaviour
             case EditorTool.Goal:
                 if (pressedNow && !overUI && StrokeGeometry.InCanvas(world)) SetGoal(world);
                 break;
+
+            case EditorTool.Start:
+                if (pressedNow && !overUI && StrokeGeometry.InCanvas(world)) SetStart(world);
+                break;
         }
     }
 
@@ -275,6 +279,7 @@ public class MapEditorController : MonoBehaviour
             EditorTool.Pen => "펜: 드래그해서 벽을 그립니다.",
             EditorTool.Eraser => "지우개: 드래그한 부분의 선이 잘려 나갑니다.",
             EditorTool.Goal => "골 배치: 캔버스를 클릭한 위치에 골이 놓입니다. 다시 클릭하면 이동합니다.",
+            EditorTool.Start => "시작 배치: 캔버스를 클릭한 위치에서 플레이어가 출발합니다. 다시 클릭하면 이동합니다.",
             _ => ""
         });
         Changed?.Invoke();
@@ -406,16 +411,42 @@ public class MapEditorController : MonoBehaviour
     {
         if (InVerification) return;
         var p = StrokeGeometry.Quantize(StrokeGeometry.ClampToCanvas(world));
-        float dist = Vector2.Distance(p, Map.StartPos);
-        if (dist < MapConstants.MinGoalDistanceFromStart)
+        if (Map.HasStart)
         {
-            SetStatus($"골은 시작점에서 {MapConstants.MinGoalDistanceFromStart:0}u 이상 떨어져야 합니다 (현재 {dist:0.0}u).");
-            return;
+            float dist = Vector2.Distance(p, Map.StartPos);
+            if (dist < MapConstants.MinGoalDistanceFromStart)
+            {
+                SetStatus($"골은 시작 위치에서 {MapConstants.MinGoalDistanceFromStart:0}u 이상 떨어져야 합니다 (현재 {dist:0.0}u).");
+                return;
+            }
         }
         PushUndo();
         Map.GoalPos = p;
-        _view.SetGoal(Map);
+        _view.SetGoal(Map); _view.SetStart(Map);
         SetStatus($"골 배치: ({p.x:0.00}, {p.y:0.00})");
+        Changed?.Invoke();
+    }
+
+    /// <summary>시작 위치 배치 (QA 2026-09-06: 시작도 제작자가 정한다). 캔버스 안쪽 여백을 지키고, 골과 3u 이상 떨어져야 한다.</summary>
+    public void SetStart(Vector2 world)
+    {
+        if (InVerification) return;
+        var p = StrokeGeometry.Quantize(new Vector2(
+            Mathf.Clamp(world.x, MapConstants.StartMarginX, MapConstants.CanvasWidth - MapConstants.StartMarginX),
+            Mathf.Clamp(world.y, MapConstants.StartMarginY, MapConstants.CanvasHeight - MapConstants.StartMarginY)));
+        if (Map.HasGoal)
+        {
+            float dist = Vector2.Distance(p, Map.GoalPos);
+            if (dist < MapConstants.MinGoalDistanceFromStart)
+            {
+                SetStatus($"시작 위치는 골에서 {MapConstants.MinGoalDistanceFromStart:0}u 이상 떨어져야 합니다 (현재 {dist:0.0}u).");
+                return;
+            }
+        }
+        PushUndo();
+        Map.StartPos = p;
+        _view.SetStart(Map);
+        SetStatus($"시작 배치: ({p.x:0.00}, {p.y:0.00})");
         Changed?.Invoke();
     }
 
@@ -431,7 +462,7 @@ public class MapEditorController : MonoBehaviour
         Map = _undo.Pop();
         InvalidateVerification();
         SyncStrokeVisuals();
-        _view.SetGoal(Map);
+        _view.SetGoal(Map); _view.SetStart(Map);
         SetStatus($"실행취소 — 스트로크 {Map.Strokes.Count}/{MapConstants.MaxStrokes}");
         Changed?.Invoke();
         return true;
@@ -444,7 +475,7 @@ public class MapEditorController : MonoBehaviour
         Map = _redo.Pop();
         InvalidateVerification();
         SyncStrokeVisuals();
-        _view.SetGoal(Map);
+        _view.SetGoal(Map); _view.SetStart(Map);
         SetStatus($"다시실행 — 스트로크 {Map.Strokes.Count}/{MapConstants.MaxStrokes}");
         Changed?.Invoke();
         return true;
@@ -453,11 +484,11 @@ public class MapEditorController : MonoBehaviour
     public void ClearAll()
     {
         if (InVerification) return;
-        if (Map.Strokes.Count == 0 && !Map.HasGoal) return;
+        if (Map.Strokes.Count == 0 && !Map.HasGoal && !Map.HasStart) return;
         PushUndo();
         Map = new MapData();
         SyncStrokeVisuals();
-        _view.SetGoal(Map);
+        _view.SetGoal(Map); _view.SetStart(Map);
         SetStatus("전체 지우기 (Ctrl+Z 로 되돌릴 수 있습니다)");
         Changed?.Invoke();
     }
@@ -470,6 +501,7 @@ public class MapEditorController : MonoBehaviour
         if (InVerification) return false;
         if (_drawing) EndStroke();
         if (_erasing) EndErase();
+        if (!Map.HasStart) { SetStatus("검증 불가: 시작 위치를 먼저 배치하세요."); return false; }
         if (!Map.HasGoal) { SetStatus("검증 불가: 골을 먼저 배치하세요."); return false; }
         if (Map.Strokes.Count == 0) { SetStatus("검증 불가: 선을 하나 이상 그리세요."); return false; }
 
@@ -508,7 +540,7 @@ public class MapEditorController : MonoBehaviour
 
         _strokesRoot.gameObject.SetActive(true);
         _view.SetGoalMarkerVisible(true);
-        _view.SetGoal(Map);
+        _view.SetGoal(Map); _view.SetStart(Map);
         SetUiVisible(true);
         _pressedLastFrame = true;   // 복귀 클릭이 곧바로 펜 입력으로 새지 않게
 
@@ -562,6 +594,7 @@ public class MapEditorController : MonoBehaviour
         if (_drawing) EndStroke();
         if (_erasing) EndErase();
 
+        if (!Map.HasStart) { SetStatus("제출 불가: 시작 위치를 먼저 배치하세요."); return null; }
         if (!Map.HasGoal) { SetStatus("제출 불가: 골을 먼저 배치하세요."); return null; }
         if (Map.Strokes.Count == 0) { SetStatus("제출 불가: 선을 하나 이상 그리세요."); return null; }
         if (!IsVerified) { SetStatus("제출 불가: [검증 플레이]로 시작점→골 클리어를 먼저 증명하세요."); return null; }
@@ -607,7 +640,7 @@ public class MapEditorController : MonoBehaviour
         PushUndo();
         Map = map.Clone();
         SyncStrokeVisuals();
-        _view.SetGoal(Map);
+        _view.SetGoal(Map); _view.SetStart(Map);
         Changed?.Invoke();
     }
 

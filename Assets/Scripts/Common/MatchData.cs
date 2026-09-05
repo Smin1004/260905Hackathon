@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-/// <summary>방 설정 5종 — Docs/100 7.1, Docs/205 3장 세션 프로퍼티와 1:1. (패타임은 모드가 아니라 항상 빼는 기준선 — Docs/206 2장)</summary>
+/// <summary>방 설정 6종 — Docs/100 7.1, Docs/205 3장 세션 프로퍼티와 1:1. (패타임은 모드가 아니라 항상 빼는 기준선 — Docs/206 2장)</summary>
 [Serializable]
 public class RoomSettings
 {
@@ -15,6 +15,8 @@ public class RoomSettings
     public int VowPickCount = 1;
     /// <summary>제시되는 후보 수 (전체 이상이면 전체). 0 = 전체</summary>
     public int VowCandidateCount = 5;
+    /// <summary>ON 이면 라운드가 지날 때마다 고르는 뜻 개수 +1 (VowPickCount + 라운드−1, 후보 수·전체 뜻 수로 상한)</summary>
+    public bool VowPickIncrement = false;
 }
 
 /// <summary>플레이 결과 — Docs/206 1장.</summary>
