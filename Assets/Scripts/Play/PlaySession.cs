@@ -90,6 +90,7 @@ public class PlaySession : MonoBehaviour
         else Debug.LogWarning("[PlaySession] 골이 없는 맵 — 클리어 판정 불가");
 
         Player = PlayerController.Spawn(map.StartPos, transform);
+        Player.HazardTouched += OnHazardTouched;   // 빨강 위험 구역 (Docs/101 1장) — 시작점 리스폰, 시도 미소모
         VowCatalog.Apply(Vows, Player, this);   // 뜻은 스폰 직후 1회 적용 — 파라미터만 바꾸므로 리스폰에도 유지된다
         if (Vows.Count > 0) Debug.Log("[PlaySession] 뜻 적용: " + VowCatalog.NamesOf(Vows));
         BuildHud();
@@ -148,6 +149,8 @@ public class PlaySession : MonoBehaviour
     {
         Finish(true, false, null);
     }
+
+    void OnHazardTouched() => Respawn(countsAsAttempt: false);
 
     void Finish(bool cleared, bool gaveUp, string reason)
     {

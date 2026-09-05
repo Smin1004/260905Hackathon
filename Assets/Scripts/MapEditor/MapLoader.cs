@@ -39,6 +39,8 @@ public class MapLoader : MonoBehaviour, ILoadableMap
     public float LeftWallHeight = 40f;
     public Color BoundaryColor = new Color(0.25f, 0.25f, 0.3f);
     public Color GoalColor = new Color(1f, 0.85f, 0.2f, 0.6f);
+    [Tooltip("색상별 기능 수치 (Docs/101 1장). BuildColliders 일 때만 스트로크에 부착된다")]
+    public StrokeBehaviours.Settings ColorBehaviours = new StrokeBehaviours.Settings();
 
     public MapData Current { get; private set; }
     public GoalZone Goal { get; private set; }
@@ -65,6 +67,7 @@ public class MapLoader : MonoBehaviour, ILoadableMap
             var go = new GameObject($"Stroke {i} (c{s.ColorId})");
             go.transform.SetParent(_root, false);
             StrokeVisual.Build(go, s.Points, s.Width, palette.GetColor(s.ColorId), BuildColliders, sortingOrder: 0);
+            if (BuildColliders) StrokeBehaviours.Attach(go, s.ColorId, ColorBehaviours);   // 색별 기능 (Docs/101 1장) — 미리보기에는 없음
         }
 
         if (BuildGoal && map.HasGoal) BuildGoalObject(map.GoalPos);
