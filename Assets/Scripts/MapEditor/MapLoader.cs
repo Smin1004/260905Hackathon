@@ -30,7 +30,7 @@ public class GoalZone : MonoBehaviour
 public class MapLoader : MonoBehaviour, ILoadableMap
 {
     [SerializeField] StrokePalette palette;
-    [Tooltip("바닥(y=0, x 0~Width)과 왼쪽 벽(x=0) 콜라이더 생성 — Docs/100 5장 기본 경계")]
+    [Tooltip("바닥(y=0)·왼쪽 벽(x=0)·오른쪽 벽(x=Width)·천장(y=Height) 콜라이더 생성 — Docs/100 5장 기본 경계 (사방 막힘)")]
     public bool BuildBoundaries = true;
     public bool BuildGoal = true;
     [Tooltip("false면 시각만 생성 (에디터 미리보기용)")]
@@ -83,18 +83,19 @@ public class MapLoader : MonoBehaviour, ILoadableMap
 
     void BuildBoundaryObjects()
     {
-        // 바닥: 왼쪽 벽 바깥까지 살짝 연장, 오른쪽 끝(Width)에서 끊김 → 그 너머는 낙하 (Docs/100 5장)
-        var floor = new GameObject("Boundary Floor");
-        floor.transform.SetParent(_root, false);
-        StrokeVisual.Build(floor,
-            new[] { new Vector2(-2f, 0f), new Vector2(MapConstants.CanvasWidth, 0f) },
-            BoundaryWidth, BoundaryColor, BuildColliders, sortingOrder: -5);
+        // 사방 경계 (QA: 오른쪽·위가 열려 있어 플레이어가 맵 밖으로 나가던 문제 → 캔버스 네 변 모두 벽). 모서리는 살짝 겹치게 연장
+        float w = MapConstants.CanvasWidth, h = MapConstants.CanvasHeight, e = 1f;
+        Boundary("Boundary Floor", new Vector2(-e, 0f), new Vector2(w + e, 0f));
+        Boundary("Boundary Left Wall", new Vector2(0f, -e), new Vector2(0f, h + e));
+        Boundary("Boundary Right Wall", new Vector2(w, -e), new Vector2(w, h + e));
+        Boundary("Boundary Ceiling", new Vector2(-e, h), new Vector2(w + e, h));
+    }
 
-        var wall = new GameObject("Boundary Left Wall");
-        wall.transform.SetParent(_root, false);
-        StrokeVisual.Build(wall,
-            new[] { new Vector2(0f, -1f), new Vector2(0f, LeftWallHeight) },
-            BoundaryWidth, BoundaryColor, BuildColliders, sortingOrder: -5);
+    void Boundary(string name, Vector2 a, Vector2 b)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(_root, false);
+        StrokeVisual.Build(go, new[] { a, b }, BoundaryWidth, BoundaryColor, BuildColliders, sortingOrder: -5);
     }
 
     void BuildGoalObject(Vector2 pos)

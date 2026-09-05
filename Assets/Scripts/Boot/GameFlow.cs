@@ -811,6 +811,7 @@ public class GameFlow : MonoBehaviour
         _nickInput = RuntimeUI.Input(card, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.85f), "닉네임 (최대 12자)");
         _nickInput.characterLimit = 12;
         _nickInput.onValueChanged.AddListener(_ => RefreshLobbyButtons());
+        WebPrompt.Attach(_nickInput, "닉네임을 입력하세요 (최대 12자)");   // WebGL: InputField 가 한글 IME 를 못 받아 브라우저 prompt 로 대신
 
         _createBtn = RuntimeUI.Button(card, new Vector2(0.08f, 0.50f), new Vector2(0.92f, 0.64f), "방 만들기", CreateRoom, new Color(0.25f, 0.55f, 0.95f), 30);
 

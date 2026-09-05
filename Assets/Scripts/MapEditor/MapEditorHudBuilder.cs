@@ -32,7 +32,8 @@ public static class MapEditorHudBuilder
     static float PaperRight => MarginX + ToolW + ToolGap;   // 종이 오른쪽 오프셋 (377)
 
     static Font _font;
-    static Font Font => _font != null ? _font : (_font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
+    // 한글 폰트 (Resources/Fonts). LegacyRuntime 은 OS 폰트 폴백에 의존해 WebGL 에서 한글이 비어 보인다 — RuntimeUI 와 같은 Pretendard 를 쓴다
+    static Font Font => _font != null ? _font : (_font = Resources.Load<Font>("Fonts/Pretendard-Bold") ?? Resources.Load<Font>("Fonts/Pretendard-Regular") ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 
     [MenuItem("Chojiilgwan/Build MapEditor HUD")]
     public static void Build()

@@ -102,10 +102,12 @@ public class CanvasView : MonoBehaviour
     {
         BuildPaper(_root, t, w, h);
 
-        // 바닥·왼쪽 벽 (Play 의 MapLoader 와 같은 굵기·색, 단 종이 밖으로 나가지 않게 캔버스 범위로 자른다 — 콜라이더 없음)
+        // 사방 경계 (Play 의 MapLoader 와 같은 굵기·색, 단 종이 밖으로 나가지 않게 캔버스 범위로 자른다 — 콜라이더 없음)
         float cap = t.BoundaryWidth * 0.5f;   // 라운드 캡이 종이 밖으로 나가지 않게 끝점을 캡 반지름만큼 안쪽으로
         Line(_root, new Vector2(cap, 0f), new Vector2(w - cap, 0f), t.BoundaryWidth, t.BoundaryColor, -5);
         Line(_root, new Vector2(0f, cap), new Vector2(0f, h - cap), t.BoundaryWidth, t.BoundaryColor, -5);
+        Line(_root, new Vector2(w, cap), new Vector2(w, h - cap), t.BoundaryWidth, t.BoundaryColor, -5);
+        Line(_root, new Vector2(cap, h), new Vector2(w - cap, h), t.BoundaryWidth, t.BoundaryColor, -5);
 
         BuildStartMarker(_root, t);
 
