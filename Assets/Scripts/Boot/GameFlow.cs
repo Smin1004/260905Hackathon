@@ -49,6 +49,8 @@ public class GameFlow : MonoBehaviour
     bool _nextRoundMine, _nextRoundTheirs;
     bool _forfeitMine, _forfeitTheirs, _forfeitShown;
     bool _myVowsConfirmed, _opponentVowsReceived;
+    int _myRoundWins, _theirRoundWins, _roundDraws;   // 매치 전적 (같은 방·같은 상대 동안 누적)
+    int _tallyAppliedRound;                            // 이 라운드의 전적을 이미 반영했는지 (제출 실패 결과가 두 번 그려질 때 중복 방지)
     readonly System.Collections.Generic.List<VowId> _vowPicks = new System.Collections.Generic.List<VowId>();
     float _drawDeadline = -1f;   // Time.time 기준 그리기 마감. -1 = 타이머 없음
     bool _busy, _leaving, _editorLoadStarted, _transitioning;
@@ -57,7 +59,7 @@ public class GameFlow : MonoBehaviour
     // UI
     Canvas _canvas;
     GameObject _lobbyPanel, _waitPanel, _resultPanel;
-    Text _lobbyStatus, _roomCodeText, _waitText, _resultTitle, _resultBody, _roomBarText;
+    Text _lobbyStatus, _roomCodeText, _waitText, _resultTitle, _resultBody, _roomBarText, _scoreText;
     InputField _nickInput, _codeInput;
     Button _createBtn, _joinBtn, _lobbyLeaveBtn, _nextRoundBtn, _resultLeaveBtn, _waitNewBtn, _roomBarLeaveBtn;
     GameObject _roomBar;
@@ -242,6 +244,8 @@ public class GameFlow : MonoBehaviour
         if (!_net.PrepareForNewOpponent()) { SetWaitText("이 방은 더 이상 사용할 수 없습니다. 방을 나가세요."); return; }
         ResetRound();
         _data.OpponentNickname = "";
+        _data.MyVowHistory.Clear(); _data.OpponentVowHistory.Clear();   // 새 상대 = 새 매치 → 일관성 이력 초기화
+        _myRoundWins = _theirRoundWins = _roundDraws = 0; _tallyAppliedRound = 0;
         Round = 1;
         LastError = "";
         SetState(MatchState.WaitingOpponent);
@@ -310,6 +314,7 @@ public class GameFlow : MonoBehaviour
         if (_vowPicks.Count != VowPickCount) return false;
         _myVowsConfirmed = true;
         _data.MyVows.Clear(); _data.MyVows.AddRange(_vowPicks);
+        _data.MyVowHistory.Add(new System.Collections.Generic.List<VowId>(_data.MyVows));   // 라운드 이력 (일관성 계수)
         _net.SendVows(_data.MyVows);
         Debug.Log("[GameFlow] 내 뜻 확정: " + VowCatalog.NamesOf(_data.MyVows));
         _vowConfirmBtn.interactable = false;
@@ -324,6 +329,8 @@ public class GameFlow : MonoBehaviour
     {
         if (_leaving || State == MatchState.Aborted) return;
         _data.OpponentVows.Clear(); _data.OpponentVows.AddRange(vows);
+        if (_opponentVowsReceived && _data.OpponentVowHistory.Count > 0) _data.OpponentVowHistory[_data.OpponentVowHistory.Count - 1] = new System.Collections.Generic.List<VowId>(vows);
+        else _data.OpponentVowHistory.Add(new System.Collections.Generic.List<VowId>(vows));
         _opponentVowsReceived = true;
         Debug.Log("[GameFlow] 상대 뜻 수신: " + VowCatalog.NamesOf(vows));
         if (State == MatchState.VowSelect && _vowHint != null)
@@ -507,10 +514,43 @@ public class GameFlow : MonoBehaviour
         if (_resultTitle == null) return;
         bool both = _forfeitMine && _forfeitTheirs;
         _resultTitle.text = both ? "무승부" : (_forfeitMine ? "패배" : "승리");
+        ApplyTally(both ? Ranking.Outcome.Draw : (_forfeitMine ? Ranking.Outcome.Lose : Ranking.Outcome.Win), overwrite: true);
+        if (_scoreText != null) _scoreText.text = $"<size=26>이번 라운드는 제출 실패로 판정</size>\n{TallyText()}";
         string who = both ? "양쪽 모두" : (_forfeitMine ? _data.MyNickname + " (나)" : _data.OpponentNickname);
         _resultBody.text = $"라운드 {Round}\n\n그리기 시간({DrawTimeLimit:0}초) 안에 맵을 제출하지 못함: {who}\n" +
                            (both ? "두 사람 모두 제출하지 못해 무승부입니다." : (_forfeitMine ? "제출 실패는 그 라운드 패배로 처리됩니다." : "상대의 제출 실패로 이 라운드는 승리입니다."));
         Debug.Log($"[GameFlow] 결과(제출 실패): {_resultTitle.text} — {who}");
+    }
+
+    /// <summary>라운드 결과를 전적에 1회 반영. overwrite = 같은 라운드에서 판정이 바뀐 경우(양쪽 동시 제출 실패 → 무승부) 갱신</summary>
+    Ranking.Outcome _lastTallyOutcome;
+    void ApplyTally(Ranking.Outcome outcome, bool overwrite = false)
+    {
+        if (_tallyAppliedRound == Round)
+        {
+            if (!overwrite || _lastTallyOutcome == outcome) return;
+            switch (_lastTallyOutcome) { case Ranking.Outcome.Win: _myRoundWins--; break; case Ranking.Outcome.Lose: _theirRoundWins--; break; default: _roundDraws--; break; }
+        }
+        _tallyAppliedRound = Round;
+        _lastTallyOutcome = outcome;
+        switch (outcome) { case Ranking.Outcome.Win: _myRoundWins++; break; case Ranking.Outcome.Lose: _theirRoundWins++; break; default: _roundDraws++; break; }
+    }
+
+    string TallyText()
+    {
+        string draws = _roundDraws > 0 ? $"  (무 {_roundDraws})" : "";
+        return $"전적  {_data.MyNickname} <b>{_myRoundWins}</b> : <b>{_theirRoundWins}</b> {_data.OpponentNickname}{draws}";
+    }
+
+    /// <summary>라운드 점수 표시. 점수 = 계수 적용 최종 시간(낮을수록 좋음), 패타임 모드면 시간 ÷ 패타임 비율</summary>
+    void SetScoreText(float myScore, float theirScore, bool parMode)
+    {
+        if (_scoreText == null) return;
+        string unit = parMode ? "" : "s";
+        string label = parMode ? "점수 (시간 ÷ 패타임, 낮을수록 좋음)" : "점수 (계수 적용 시간, 낮을수록 좋음)";
+        string me = myScore <= theirScore ? $"<color=#8CFFA6>{myScore:0.00}{unit}</color>" : $"{myScore:0.00}{unit}";
+        string them = theirScore < myScore ? $"<color=#8CFFA6>{theirScore:0.00}{unit}</color>" : $"{theirScore:0.00}{unit}";
+        _scoreText.text = $"<size=22>{label}</size>\n{_data.MyNickname} {me}   vs   {them} {_data.OpponentNickname}\n<size=26>{TallyText()}</size>";
     }
 
     void OnMyMapCompleted(MapData map, byte[] payload)
@@ -585,11 +625,23 @@ public class GameFlow : MonoBehaviour
         ShowPanel(_resultPanel);
 
         var s = _data.Settings;
-        var outcome = Ranking.Judge(_data.MyResult, _data.OpponentParTime, _data.OpponentResult, _data.MyParTime, s);
+        // 뜻 계수: 난이도 × 일관성 (Docs/206 2.5). 하드 강제된 뜻을 끝까지 유지한 보상 — 초지일관
+        float myMult = VowCatalog.ScoreMultiplier(_data.MyVows, _data.MyVowHistory);
+        float theirMult = VowCatalog.ScoreMultiplier(_data.OpponentVows, _data.OpponentVowHistory);
+        int myStreak = VowCatalog.Streak(_data.MyVowHistory), theirStreak = VowCatalog.Streak(_data.OpponentVowHistory);
+        var outcome = Ranking.Judge(_data.MyResult, _data.OpponentParTime, _data.OpponentResult, _data.MyParTime, s, myMult, theirMult);
         _resultTitle.text = Ranking.OutcomeText(outcome);
+        ApplyTally(outcome);
+        float myScore = Ranking.Score(_data.MyResult, _data.OpponentParTime, s, myMult);
+        float theirScore = Ranking.Score(_data.OpponentResult, _data.MyParTime, s, theirMult);
+        SetScoreText(myScore, theirScore, s.ParTimeMode);
+        string vowLine =
+            $"\n\n뜻 계수 — 나: 난이도 ×{VowCatalog.TierMultiplier(_data.MyVows):0.00} · 연속 {myStreak}라운드 ×{VowCatalog.ConsistencyCoefficient(myStreak):0.00} → 최종 {Ranking.AdjustedTime(_data.MyResult, s, myMult):0.00}s" +
+            $"   |   상대: 난이도 ×{VowCatalog.TierMultiplier(_data.OpponentVows):0.00} · 연속 {theirStreak}라운드 ×{VowCatalog.ConsistencyCoefficient(theirStreak):0.00} → 최종 {Ranking.AdjustedTime(_data.OpponentResult, s, theirMult):0.00}s";
         string par = s.ParTimeMode
-            ? $"\n\n패타임 모드: 내 점수 {Ranking.Score(_data.MyResult, _data.OpponentParTime, s):0.00}  /  상대 점수 {Ranking.Score(_data.OpponentResult, _data.MyParTime, s):0.00}"
+            ? $"\n패타임 모드: 내 점수 {Ranking.Score(_data.MyResult, _data.OpponentParTime, s, myMult):0.00}  /  상대 점수 {Ranking.Score(_data.OpponentResult, _data.MyParTime, s, theirMult):0.00}"
             : "";
+        par = vowLine + par;
         _resultBody.text =
             $"라운드 {Round}\n\n" +
             $"{_data.MyNickname} (나) — {_data.OpponentNickname}의 맵: {Ranking.RecordText(_data.MyResult, s)}   (맵 패타임 {_data.OpponentParTime:0.00}s)   뜻: {VowCatalog.NamesOf(_data.MyVows)}\n" +
@@ -599,7 +651,8 @@ public class GameFlow : MonoBehaviour
         _nextRoundBtn.GetComponentInChildren<Text>().text = "다음 라운드 (같은 방)";
         _waitNewBtn.gameObject.SetActive(false);
         _resultLeaveBtn.gameObject.SetActive(true);
-        SetResultHint(_nextRoundTheirs ? "상대가 다음 라운드를 기다리고 있습니다" : "");
+        string badge = myStreak >= 2 ? $"초지일관 — {myStreak}라운드 연속 같은 뜻을 지켰습니다" : "";
+        SetResultHint(_nextRoundTheirs ? (badge.Length > 0 ? badge + "  ·  " : "") + "상대가 다음 라운드를 기다리고 있습니다" : badge);
         Debug.Log($"[GameFlow] 결과: {_resultTitle.text} | {_resultBody.text.Replace('\n', ' ')}");
     }
 
@@ -639,6 +692,8 @@ public class GameFlow : MonoBehaviour
     void ResetAll()
     {
         ResetRound();
+        _myRoundWins = _theirRoundWins = _roundDraws = 0; _tallyAppliedRound = 0;
+        if (_scoreText != null) _scoreText.text = "";
         Round = 1;
         _data.ResetMatch();
         _data.OpponentNickname = "";
@@ -731,8 +786,10 @@ public class GameFlow : MonoBehaviour
         // ---- 결과 / 무효
         _resultPanel = RuntimeUI.Panel(root, Vector2.zero, Vector2.one, new Color(0.10f, 0.11f, 0.14f)).gameObject;
         var rp = _resultPanel.transform;
-        _resultTitle = RuntimeUI.Label(rp, new Vector2(0f, 0.72f), new Vector2(1f, 0.92f), "", 96, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
-        _resultBody = RuntimeUI.Label(rp, new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.70f), "", 28, TextAnchor.MiddleCenter, new Color(0.9f, 0.9f, 0.95f));
+        _resultTitle = RuntimeUI.Label(rp, new Vector2(0f, 0.76f), new Vector2(1f, 0.94f), "", 96, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+        _scoreText = RuntimeUI.Label(rp, new Vector2(0.05f, 0.62f), new Vector2(0.95f, 0.76f), "", 34, TextAnchor.MiddleCenter, new Color(0.55f, 1f, 0.65f), FontStyle.Bold);
+        _scoreText.supportRichText = true;
+        _resultBody = RuntimeUI.Label(rp, new Vector2(0.08f, 0.34f), new Vector2(0.92f, 0.61f), "", 24, TextAnchor.MiddleCenter, new Color(0.9f, 0.9f, 0.95f));
         _nextRoundBtn = RuntimeUI.Button(rp, new Vector2(0.20f, 0.18f), new Vector2(0.48f, 0.28f), "다음 라운드 (같은 방)", RequestNextRound, new Color(0.20f, 0.65f, 0.40f), 28);
         _waitNewBtn = RuntimeUI.Button(rp, new Vector2(0.20f, 0.18f), new Vector2(0.48f, 0.28f), "같은 방에서 새 상대 기다리기", WaitForNewOpponent, new Color(0.25f, 0.55f, 0.95f), 24);
         _resultLeaveBtn = RuntimeUI.Button(rp, new Vector2(0.52f, 0.18f), new Vector2(0.80f, 0.28f), "방 나가기", LeaveRoom, new Color(0.6f, 0.3f, 0.3f), 28);

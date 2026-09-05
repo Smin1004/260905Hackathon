@@ -73,6 +73,48 @@ public static class VowCatalog
             Apply = c => { c.Player.GroundAccelTime = 0.5f; c.Player.GroundDecelTime = 0.6f; c.Player.IdleFriction = 0.05f; c.Player.RefreshMaterials(); } },
     };
 
+    // ------------------------------------------------------------------ 점수 계수 (Docs/206 2.5, 초지일관 = 뜻을 끝까지 유지)
+
+    /// <summary>뜻 난이도 계수 — 클리어 시간에 곱한다. Tier 1 ×1.00 / 2 ×0.93 / 3 ×0.85</summary>
+    public static float TierCoefficient(int tier) => tier <= 1 ? 1.00f : (tier == 2 ? 0.93f : 0.85f);
+
+    /// <summary>선택한 뜻들의 난이도 계수 곱</summary>
+    public static float TierMultiplier(IList<VowId> ids)
+    {
+        float m = 1f;
+        if (ids == null) return m;
+        foreach (var id in ids) { var d = Get(id); if (d != null) m *= TierCoefficient(d.Tier); }
+        return m;
+    }
+
+    /// <summary>일관성 계수 — 같은 뜻 조합을 연속 유지한 라운드 수. 1 ×1.00 / 2 ×0.95 / 3 ×0.90 / 4+ ×0.85</summary>
+    public static float ConsistencyCoefficient(int streak) => streak <= 1 ? 1.00f : (streak == 2 ? 0.95f : (streak == 3 ? 0.90f : 0.85f));
+
+    /// <summary>순서 무관 집합 비교</summary>
+    public static bool SameSet(IList<VowId> a, IList<VowId> b)
+    {
+        if (a == null || b == null) return a == b;
+        if (a.Count != b.Count) return false;
+        foreach (var id in a) if (!b.Contains(id)) return false;
+        return true;
+    }
+
+    /// <summary>라운드별 뜻 이력에서 마지막 라운드까지 연속으로 같은 조합을 유지한 횟수 (이력이 비면 0)</summary>
+    public static int Streak(IList<List<VowId>> history)
+    {
+        if (history == null || history.Count == 0) return 0;
+        int n = 1;
+        for (int i = history.Count - 1; i > 0; i--)
+        {
+            if (SameSet(history[i], history[i - 1])) n++; else break;
+        }
+        return n;
+    }
+
+    /// <summary>최종 곱 계수 = 난이도 × 일관성</summary>
+    public static float ScoreMultiplier(IList<VowId> vows, IList<List<VowId>> history)
+        => TierMultiplier(vows) * ConsistencyCoefficient(Streak(history));
+
     public static VowDef Get(VowId id)
     {
         foreach (var v in All) if (v.Id == id) return v;

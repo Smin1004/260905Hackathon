@@ -60,6 +60,9 @@ public class MatchData : MonoBehaviour
     public System.Collections.Generic.List<VowId> MyVows = new System.Collections.Generic.List<VowId>();
     /// <summary>상대가 고른 뜻 — 내 맵 검증 플레이에 적용, 에디터에 표시</summary>
     public System.Collections.Generic.List<VowId> OpponentVows = new System.Collections.Generic.List<VowId>();
+    /// <summary>라운드별 뜻 이력 (초지일관 일관성 계수용). 같은 방에서 라운드를 이어갈 때 누적, 방을 나가거나 새 상대를 받으면 초기화</summary>
+    public System.Collections.Generic.List<System.Collections.Generic.List<VowId>> MyVowHistory = new System.Collections.Generic.List<System.Collections.Generic.List<VowId>>();
+    public System.Collections.Generic.List<System.Collections.Generic.List<VowId>> OpponentVowHistory = new System.Collections.Generic.List<System.Collections.Generic.List<VowId>>();
     public MapData MyMap;            // 내가 만든 맵 (검증 완료본)
     public MapData OpponentMap;      // 상대가 만든 맵
     public RoomSettings Settings = new RoomSettings();
@@ -81,6 +84,7 @@ public class MatchData : MonoBehaviour
     public void ResetMatch()
     {
         MyVows.Clear(); OpponentVows.Clear();
+        MyVowHistory.Clear(); OpponentVowHistory.Clear();
         MyMap = OpponentMap = null;
         MyParTime = OpponentParTime = 0f;
         MyResult = OpponentResult = null;

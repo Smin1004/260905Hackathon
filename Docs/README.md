@@ -54,6 +54,7 @@
 |---|---|
 | 2026-09-06 | **맵 에디터 HUD 시안 구현** (`Prefabs/UI/MapEditorHud.prefab`, `Scripts/MapEditor/MapEditorHud.cs`·`HudToolButton.cs`·`MapEditorTheme.cs`·`MapEditorHudBuilder.cs`, `UI/MapEditorTheme.asset`, `Assets/image/` 에셋 52장): 라운드·안내문·타이머 링 / 도구 패널 / 굵기·색상 / 상태 칩 / 검증·완료. 종이 프레임이 맵 사각형을 따라가도록 카메라 맞춤 일반화(`CanvasView.FitCamera(Rect)`). 메뉴 [Chojiilgwan > Build MapEditor HUD] 로 재생성. 그리기 타이머는 표시만 (203·204 갱신) |
 | 2026-09-05 | Unity 6000.0.66f2·신 Input System으로 환경 확정. 조작키(A/D·←/→, W/↑, R) 확정. 방 설정에 **플레이 시간 제한** 추가(검증·교환 공용). 낙하 자동 리스폰(시도 미소모)·R키 리스폰(시도 +1)·리스폰 시 뜻 카운터 초기화. 캔버스 경계(바닥·왼쪽 벽 고정, 천장·오른쪽 개방). 골 자동 배치 삭제(직접 배치 필수). 뜻 선택 방식(목록/랜덤 후보, 뜻 없음 불가). 미클리어 기록 = PlayTimeLimit(제안). 닉네임 필드 추가 |
+| 2026-09-06 | **뜻 점수 계수** (206 2.5): 뜻은 하드 강제 유지, 클리어 시간 × 난이도 계수(Tier) × 일관성 계수(같은 뜻 연속 라운드). 결과 화면에 계수·"초지일관" 배지 표시. 소프트 뜻(위반 페널티) 안은 제작자 설계를 무력화해 폐기 |
 | 2026-09-06 | **뜻 시스템 1차** (`Scripts/Common/Vows.cs`): 8종(저속·저점프·고중력·점프 쿨다운·점프 5회·공중 제어 금지·큰 몸집·미끄러운 발), 라운드마다 후보 중 선택 → 교환 → 검증은 상대 뜻·교환 플레이는 내 뜻 적용, 에디터에 상대 뜻 표시. 그리기 시간 만료 = 제출 실패(라운드 패배). 방 나가기 버튼 재배치 |
 | 2026-09-05 | 라운드 반복·방 나가기: 결과 화면 [다음 라운드]로 같은 방에서 재시작, [방 나가기] 버튼(에디터·대기·결과), 호스트의 [새 상대 기다리기]. 로비 복귀 간헐적 멈춤 수정(Leave 타임아웃 + 제자리 초기화) |
 | 2026-09-05 | **멀티 연동 구현** (`Scripts/Network/NetService.cs`, `Scripts/Boot/GameFlow.cs`, `Scripts/Play/PlayBootstrap.cs`, `Scripts/Common/Ranking.cs`, `Scripts/Debug/AutoPilot.cs`, 씬 `Boot`·`Play`): 방 생성/코드 참가 → 양쪽 맵 제작·검증·완료 → 맵 데이터 4KB 청크 교환 → 상대 맵 교환 플레이(시간·시도 제한, 기권) → 결과 교환·판정 화면. Boot 씬 상주 + 애디티브 씬 전환. 개발 빌드 `-autohost`/`-autojoin` 자동 종단 테스트 |

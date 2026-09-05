@@ -20,15 +20,26 @@ public static class Ranking
     }
 
     /// <param name="playedMapParTime">그 플레이어가 플레이한 맵(= 상대가 만든 맵)의 패타임</param>
-    public static float Score(PlayerRecord r, float playedMapParTime, RoomSettings s)
+    /// <param name="vowMultiplier">뜻 난이도 × 일관성 계수 (VowCatalog.ScoreMultiplier). 클리어 기록에만 곱한다 — 미클리어는 PlayTimeLimit 그대로</param>
+    public static float Score(PlayerRecord r, float playedMapParTime, RoomSettings s, float vowMultiplier = 1f)
     {
         float t = EffectiveTime(r, s);
+        bool cleared = r != null && r.Cleared && !r.GaveUp;
+        if (cleared) t *= Mathf.Clamp(vowMultiplier, 0.1f, 1f);
         if (s.ParTimeMode && playedMapParTime > 0.01f) return t / playedMapParTime;
         return t;
     }
 
+    /// <summary>계수 적용 후 시간 (표시용). 미클리어면 PlayTimeLimit</summary>
+    public static float AdjustedTime(PlayerRecord r, RoomSettings s, float vowMultiplier)
+    {
+        float t = EffectiveTime(r, s);
+        bool cleared = r != null && r.Cleared && !r.GaveUp;
+        return cleared ? t * Mathf.Clamp(vowMultiplier, 0.1f, 1f) : t;
+    }
+
     /// <summary>내 관점의 판정. mine 은 내가 상대 맵을 플레이한 기록, theirs 는 상대가 내 맵을 플레이한 기록.</summary>
-    public static Outcome Judge(PlayerRecord mine, float opponentMapParTime, PlayerRecord theirs, float myMapParTime, RoomSettings s)
+    public static Outcome Judge(PlayerRecord mine, float opponentMapParTime, PlayerRecord theirs, float myMapParTime, RoomSettings s, float myVowMultiplier = 1f, float theirVowMultiplier = 1f)
     {
         // 클리어가 미클리어를 항상 이긴다. 두 플레이어는 서로 다른 맵(다른 패타임)을 플레이하므로
         // 패타임 모드에서는 "미클리어 = PlayTimeLimit" 만으로는 이 불변식이 보장되지 않아 명시적으로 먼저 판정한다.
@@ -37,8 +48,8 @@ public static class Ranking
         if (myClear && !theirClear) return Outcome.Win;
         if (theirClear && !myClear) return Outcome.Lose;
 
-        float my = Score(mine, opponentMapParTime, s);
-        float their = Score(theirs, myMapParTime, s);
+        float my = Score(mine, opponentMapParTime, s, myVowMultiplier);
+        float their = Score(theirs, myMapParTime, s, theirVowMultiplier);
         if (my < their - Epsilon) return Outcome.Win;
         if (their < my - Epsilon) return Outcome.Lose;
         int myAttempts = mine?.AttemptsUsed ?? int.MaxValue;
