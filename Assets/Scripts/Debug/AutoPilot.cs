@@ -86,8 +86,7 @@ public class AutoPilot : MonoBehaviour
             if (_flow.State == MatchState.VowSelect)
             {
                 yield return new WaitForSeconds(0.5f);
-                var picks = new System.Collections.Generic.List<VowId>();
-                foreach (var d in _flow.VowCandidates) { picks.Add(d.Id); if (picks.Count >= _flow.VowPickCount) break; }
+                var picks = VowCatalog.PickCompatible(_flow.VowCandidates, _flow.VowPickCount);   // 조합 금지 회피
                 Log($"[R{round}] 뜻 선택: " + VowCatalog.NamesOf(picks));
                 _flow.ConfirmVows(picks);
                 while (_flow.State == MatchState.VowSelect) yield return null;

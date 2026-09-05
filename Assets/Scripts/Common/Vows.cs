@@ -14,6 +14,12 @@ public enum VowId
     NoAirControl = 6,   // 공중 제어 금지
     BigBody = 7,        // 큰 몸집
     Slippery = 8,       // 미끄러운 발
+    Speedy = 9,         // 과속
+    AutoRun = 10,       // 쉬지 않는 발
+    RubberBall = 11,    // 고무공
+    LowGravity = 12,    // 달 걷기
+    WallBounce = 13,    // 튕기는 몸
+    Ghost = 14,         // 투명 인간
 }
 
 /// <summary>뜻 적용 시점에 넘겨주는 문맥. 뜻은 이 안의 공개 파라미터만 바꾼다.</summary>
@@ -35,6 +41,8 @@ public class VowDef
     public Action<VowContext> Apply;
     /// <summary>HUD 에 붙일 실시간 상태 (남은 점프 수 등). null 이면 이름만 표시.</summary>
     public Func<VowContext, string> Status;
+    /// <summary>함께 고를 수 없는 뜻 (조합 금지 — 한쪽에만 적어도 양방향으로 취급). 후보 뽑기와 선택 UI·확정에서 검사.</summary>
+    public VowId[] Conflicts;
 }
 
 /// <summary>
@@ -47,13 +55,13 @@ public static class VowCatalog
     public static readonly List<VowDef> All = new List<VowDef>
     {
         new VowDef { Id = VowId.SlowMove, Name = "저속", Tier = 1, Description = "이동 속도가 절반이 됩니다.",
-            Apply = c => c.Player.MoveSpeed *= 0.5f },
+            Apply = c => c.Player.MoveSpeed *= 0.5f, Conflicts = new[] { VowId.Speedy } },
 
         new VowDef { Id = VowId.LowJump, Name = "저점프", Tier = 1, Description = "점프 높이가 절반이 됩니다.",
             Apply = c => c.Player.JumpSpeed *= 0.71f },   // 높이 ∝ v² → ×0.5
 
         new VowDef { Id = VowId.HeavyGravity, Name = "고중력", Tier = 2, Description = "중력이 1.6배. 점프가 짧고 낙하가 빠릅니다.",
-            Apply = c => { c.Player.RiseGravity *= 1.6f; c.Player.FallGravity *= 1.6f; } },
+            Apply = c => { c.Player.RiseGravity *= 1.6f; c.Player.FallGravity *= 1.6f; }, Conflicts = new[] { VowId.LowGravity } },
 
         new VowDef { Id = VowId.JumpCooldown, Name = "점프 쿨다운", Tier = 2, Description = "착지 후 1초 동안 다시 뛸 수 없습니다.",
             Apply = c => c.Player.JumpCooldownAfterLanding = 1.0f,
@@ -71,7 +79,77 @@ public static class VowCatalog
 
         new VowDef { Id = VowId.Slippery, Name = "미끄러운 발", Tier = 3, Description = "가속과 감속이 느리고 경사에서 미끄러집니다.",
             Apply = c => { c.Player.GroundAccelTime = 0.5f; c.Player.GroundDecelTime = 0.6f; c.Player.IdleFriction = 0.05f; c.Player.RefreshMaterials(); } },
+
+        // ---- 2026-09-06 추가 6종
+        new VowDef { Id = VowId.Speedy, Name = "과속", Tier = 2, Description = "이동 속도가 1.6배. 정밀한 착지가 어려워집니다.",
+            Apply = c => c.Player.MoveSpeed *= 1.6f, Conflicts = new[] { VowId.SlowMove } },
+
+        new VowDef { Id = VowId.AutoRun, Name = "쉬지 않는 발", Tier = 3, Description = "멈출 수 없습니다. 좌우 키는 방향만 바꾸고 점프는 그대로.",
+            Apply = c => c.Player.AutoRun = true },
+
+        new VowDef { Id = VowId.RubberBall, Name = "고무공", Tier = 3, Description = "어디에 착지해도 다시 튕깁니다. 몇 번 튕긴 뒤에야 멈춥니다.",
+            Apply = c => c.Player.AlwaysBounceFactor = 0.6f },
+
+        new VowDef { Id = VowId.LowGravity, Name = "달 걷기", Tier = 1, Description = "중력이 절반. 점프 높이는 같지만 오래 떠 있어 타이밍이 어긋납니다.",
+            Apply = c => { c.Player.RiseGravity *= 0.5f; c.Player.FallGravity *= 0.5f; c.Player.JumpSpeed *= 0.71f; }, Conflicts = new[] { VowId.HeavyGravity } },
+
+        new VowDef { Id = VowId.WallBounce, Name = "튕기는 몸", Tier = 2, Description = "벽에 닿으면 반대로 밀려납니다. 벽에 붙어 서 있을 수 없습니다.",
+            Apply = c => c.Player.WallBounceSpeed = 7f },
+
+        new VowDef { Id = VowId.Ghost, Name = "투명 인간", Tier = 2, Description = "캐릭터가 반투명하게 깜빡여 위치를 읽기 어렵습니다.",
+            Apply = c => c.Player.Translucent = true },
     };
+
+    // ------------------------------------------------------------------ 조합 금지 (Docs/100 4.1)
+
+    /// <summary>두 뜻이 함께 고를 수 없는 짝인가 (어느 한쪽 Conflicts 에 있으면 금지)</summary>
+    public static bool Conflicts(VowId a, VowId b)
+    {
+        if (a == b) return false;
+        var da = Get(a); var db = Get(b);
+        if (da?.Conflicts != null && Array.IndexOf(da.Conflicts, b) >= 0) return true;
+        if (db?.Conflicts != null && Array.IndexOf(db.Conflicts, a) >= 0) return true;
+        return false;
+    }
+
+    /// <summary>id 를 picks 에 더해도 되는가</summary>
+    public static bool IsCompatible(IList<VowId> picks, VowId id)
+    {
+        if (picks == null) return true;
+        foreach (var p in picks) if (Conflicts(p, id)) return false;
+        return true;
+    }
+
+    /// <summary>picks 안에 금지 짝이 없는가</summary>
+    public static bool IsValidSet(IList<VowId> picks)
+    {
+        if (picks == null) return true;
+        for (int i = 0; i < picks.Count; i++)
+            for (int j = i + 1; j < picks.Count; j++)
+                if (Conflicts(picks[i], picks[j])) return false;
+        return true;
+    }
+
+    /// <summary>picks 와 충돌하는 상대 뜻 이름 (안내 문구용). 없으면 null</summary>
+    public static string ConflictingName(IList<VowId> picks, VowId id)
+    {
+        if (picks == null) return null;
+        foreach (var p in picks) if (Conflicts(p, id)) return NameOf(p);
+        return null;
+    }
+
+    /// <summary>후보 목록에서 서로 충돌하지 않는 n 개를 앞에서부터 고른다 (AutoPilot·폴백용)</summary>
+    public static List<VowId> PickCompatible(IList<VowDef> candidates, int n)
+    {
+        var picks = new List<VowId>();
+        if (candidates == null) return picks;
+        foreach (var d in candidates)
+        {
+            if (picks.Count >= n) break;
+            if (d != null && IsCompatible(picks, d.Id)) picks.Add(d.Id);
+        }
+        return picks;
+    }
 
     // ------------------------------------------------------------------ 점수 계수 (Docs/206 2.5, 초지일관 = 뜻을 끝까지 유지)
 
@@ -132,13 +210,28 @@ public static class VowCatalog
         return string.Join(", ", names);
     }
 
-    /// <summary>후보 뽑기: count 개를 무작위로 (count ≥ 전체면 전체, 순서만 섞음).</summary>
+    /// <summary>
+    /// 후보 뽑기: count 개를 무작위로 (count ≥ 전체면 전체, 순서만 섞음).
+    /// count 가 전체보다 작으면 서로 충돌하는 짝(저속↔과속 등)이 한 후보 안에 함께 나오지 않게 고른다 — 어떤 조합을 골라도 유효.
+    /// 전체를 보여줄 때는 충돌 짝이 포함되므로 선택 UI·확정에서 IsCompatible/IsValidSet 으로 막는다.
+    /// </summary>
     public static List<VowDef> RandomCandidates(int count)
     {
         var pool = new List<VowDef>(All);
         for (int i = pool.Count - 1; i > 0; i--) { int j = UnityEngine.Random.Range(0, i + 1); var t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
-        if (count > 0 && count < pool.Count) pool.RemoveRange(count, pool.Count - count);
-        return pool;
+        if (count <= 0 || count >= pool.Count) return pool;
+
+        var picked = new List<VowDef>();
+        var ids = new List<VowId>();
+        foreach (var d in pool)
+        {
+            if (picked.Count >= count) break;
+            if (!IsCompatible(ids, d.Id)) continue;
+            picked.Add(d); ids.Add(d.Id);
+        }
+        // 충돌 회피로 모자라면(뜻이 아주 적을 때만) 남은 것으로 채운다
+        foreach (var d in pool) { if (picked.Count >= count) break; if (!picked.Contains(d)) picked.Add(d); }
+        return picked;
     }
 
     /// <summary>뜻 목록을 플레이어에 적용 (스폰 직후 1회).</summary>

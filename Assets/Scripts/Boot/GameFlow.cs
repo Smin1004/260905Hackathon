@@ -351,8 +351,19 @@ public class GameFlow : MonoBehaviour
     {
         if (State != MatchState.VowSelect || _myVowsConfirmed) return;
         if (_vowPicks.Contains(id)) _vowPicks.Remove(id);
-        else if (_vowPicks.Count < VowPickCount) _vowPicks.Add(id);
-        else { _vowPicks.RemoveAt(0); _vowPicks.Add(id); }   // 꽉 찼으면 가장 먼저 고른 것을 교체
+        else
+        {
+            var others = new System.Collections.Generic.List<VowId>(_vowPicks);
+            if (others.Count >= VowPickCount) others.RemoveAt(0);   // 꽉 찼으면 가장 먼저 고른 것을 교체
+            var clash = VowCatalog.ConflictingName(others, id);
+            if (clash != null)
+            {
+                // 조합 금지 (Docs/100 4.1): 저속↔과속, 고중력↔달 걷기 등
+                _vowHint.text = $"{VowCatalog.NameOf(id)}은(는) {clash}와 함께 고를 수 없습니다.";
+                return;
+            }
+            _vowPicks.Clear(); _vowPicks.AddRange(others); _vowPicks.Add(id);
+        }
         RefreshVowCards();
     }
 
@@ -362,6 +373,7 @@ public class GameFlow : MonoBehaviour
         if (State != MatchState.VowSelect || _myVowsConfirmed) return false;
         if (picks != null) { _vowPicks.Clear(); foreach (var v in picks) if (!_vowPicks.Contains(v) && VowCatalog.Get(v) != null) _vowPicks.Add(v); }
         if (_vowPicks.Count != VowPickCount) return false;
+        if (!VowCatalog.IsValidSet(_vowPicks)) { _vowHint.text = "함께 고를 수 없는 뜻이 섞여 있습니다."; return false; }
         _myVowsConfirmed = true;
         Sound.Play(SfxId.Confirm);   // 확정됨
         _data.MyVows.Clear(); _data.MyVows.AddRange(_vowPicks);
@@ -422,7 +434,8 @@ public class GameFlow : MonoBehaviour
         for (int i = 0; i < _vowCardButtons.Count && i < VowCandidates.Count; i++)
         {
             bool sel = _vowPicks.Contains(VowCandidates[i].Id);
-            _vowCardButtons[i].GetComponent<Image>().color = sel ? new Color(0.25f, 0.55f, 0.95f) : new Color(0.22f, 0.24f, 0.30f);
+            bool blocked = !sel && !VowCatalog.IsCompatible(_vowPicks, VowCandidates[i].Id);   // 현재 선택과 조합 금지 → 어둡게
+            _vowCardButtons[i].GetComponent<Image>().color = sel ? new Color(0.25f, 0.55f, 0.95f) : blocked ? new Color(0.30f, 0.18f, 0.20f) : new Color(0.22f, 0.24f, 0.30f);
             _vowCardButtons[i].interactable = !_myVowsConfirmed;
         }
         if (_vowConfirmBtn != null && !_myVowsConfirmed) _vowConfirmBtn.interactable = _vowPicks.Count == VowPickCount;

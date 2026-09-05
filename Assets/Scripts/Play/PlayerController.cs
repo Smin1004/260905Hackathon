@@ -29,6 +29,10 @@ public class PlayerController : MonoBehaviour
     [Tooltip("0 → 최고 속도까지 걸리는 시간 (공중)")] public float AirAccelTime = 0.1f;
     [Tooltip("가속 시간이 이 값 이하일 때만 방향 전환 시 즉시 제동(스냅). 얼음·미끄러운 발처럼 가속이 느리면 관성이 유지되어 반대 키를 눌러도 미끄러진다")] public float TurnSnapMaxAccelTime = 0.15f;
     [Tooltip("false 면 공중에서 수평 속도를 바꿀 수 없다 (뜻: 공중 제어 금지)")] public bool AirControl = true;
+    [Tooltip("true 면 바라보는 방향으로 항상 달린다. 좌우 키는 방향 전환만 (뜻: 쉬지 않는 발)")] public bool AutoRun = false;
+    [Tooltip("0 보다 크면 모든 착지에서 낙하 속도 × 이 값으로 다시 튕긴다. 낙하 3u/s 미만이면 멈춤 (뜻: 고무공)")] public float AlwaysBounceFactor = 0f;
+    [Tooltip("0 보다 크면 벽(옆면)에 닿을 때 이 속도로 반대로 밀려난다 (뜻: 튕기는 몸)")] public float WallBounceSpeed = 0f;
+    [Tooltip("true 면 캐릭터가 반투명하게 깜빡인다 (뜻: 투명 인간)")] public bool Translucent = false;
 
     [Header("점프")]
     public float JumpSpeed = 10f;                 // 최대 높이 ≈ 2.5u (상승 중력 2.0 기준)
@@ -108,6 +112,8 @@ public class PlayerController : MonoBehaviour
     Collider2D _groundCollider;
     SurfaceModifier _surface;      // 파랑 얼음: 서 있는 동안만 배율/하한 적용 (뜻이 정한 기준값은 그대로)
     BounceStroke _groundBounce;    // 초록 바운스
+    int _autoDir = 1;              // 쉬지 않는 발: 현재 달리는 방향
+    float _wallBounceLock;         // 튕기는 몸: 튕긴 직후 수평 조작 무시 시간
     bool _bouncing;                // 바운스로 떠 있는 중 (점프와 달리 키 떼기 컷 없음)
     float _pendingBounce;          // 이번 스텝 착지에서 발동할 바운스 배율 (0 = 없음)
     bool _groundChanged;           // 이번 스텝에 발밑 콜라이더가 바뀜 (검정 → 초록으로 걸어 올라선 경우도 바운스)
@@ -227,6 +233,11 @@ public class PlayerController : MonoBehaviour
             if (MoveOverride.HasValue) x = Mathf.Clamp(MoveOverride.Value, -1f, 1f);
             if (JumpHeldOverride.HasValue) jumpHeld = JumpHeldOverride.Value;
             if (FastFallOverride.HasValue) fastFall = FastFallOverride.Value;
+            if (AutoRun)
+            {
+                if (x != 0f) _autoDir = x < 0f ? -1 : 1;   // 키는 방향 전환만
+                x = _autoDir;
+            }
         }
         MoveInput = x;
         JumpHeld = jumpHeld;
@@ -256,6 +267,9 @@ public class PlayerController : MonoBehaviour
         // 초록 바운스: 착지했거나 걸어서 초록 선 위로 올라선 스텝에 발동 (속도 확정 후 아래에서 적용)
         if (IsGrounded && _groundBounce != null && (!_wasGrounded || _groundChanged))
             _pendingBounce = Mathf.Max(0f, _groundBounce.SpeedMultiplier);
+        // 고무공(뜻): 어디에 착지해도 낙하 속도 × 계수로 다시 튕김 — 점점 줄어들다 3u/s 미만이면 멈춘다
+        else if (IsGrounded && !_wasGrounded && AlwaysBounceFactor > 0f && _lastFallSpeed >= 3f)
+            _pendingBounce = Mathf.Clamp(_lastFallSpeed * AlwaysBounceFactor / Mathf.Max(0.1f, JumpSpeed), 0.05f, 1.2f);
         _wasGrounded = IsGrounded;
 
         bool jumpBuffered = Time.time - _jumpPressedTime <= JumpBufferTime;
@@ -268,7 +282,8 @@ public class PlayerController : MonoBehaviour
         bool idle = Mathf.Approximately(target, 0f);
 
         // ---- 수평 이동
-        if (IsGrounded && !doJump)
+        if (_wallBounceLock > 0f) { _wallBounceLock -= dt; }   // 튕기는 몸: 튕긴 직후 잠깐은 조작이 속도를 덮어쓰지 않게
+        else if (IsGrounded && !doJump)
         {
             var tangent = new Vector2(GroundNormal.y, -GroundNormal.x);        // 노멀에 수직, 오른쪽 방향
             float decelTime = EffectiveGroundDecelTime;                          // 얼음 위에서는 추가 감속 시간이 더해짐 (Docs/101 파랑)
@@ -408,6 +423,24 @@ public class PlayerController : MonoBehaviour
     void OnCollisionEnter2D(Collision2D collision)
     {
         if (collision.collider != null && collision.collider.TryGetComponent<HazardStroke>(out _)) HazardTouched?.Invoke();
+        if (WallBounceSpeed > 0f && _rb != null)
+        {
+            // 옆면(노멀이 거의 수평) 접촉 → 반대로 밀려남. 바닥·천장은 무시
+            for (int i = 0; i < collision.contactCount; i++)
+            {
+                var n = collision.GetContact(i).normal;
+                if (Mathf.Abs(n.x) < 0.7f) continue;
+                float dir = Mathf.Sign(n.x);
+                var v = _rb.linearVelocity;
+                _rb.linearVelocity = new Vector2(dir * WallBounceSpeed, Mathf.Max(v.y, 2.5f));
+                _wallBounceLock = 0.18f;
+                if (AutoRun) _autoDir = dir > 0f ? 1 : -1;   // 쉬지 않는 발과 겹치면 벽에서 방향이 바뀐다
+                if (_visualSr != null) _visualSr.flipX = dir < 0f;
+                _squash = new Vector2(0.75f, 1.2f); _squashTimer = SquashDuration;
+                if (EnableSound) Sound.Play(SfxId.Land, 0.6f);
+                break;
+            }
+        }
     }
 
     /// <summary>상승 중 머리가 모서리에 걸리면 (CornerCorrection 이내) 옆으로 밀어 속도 손실 없이 넘어간다.</summary>
@@ -524,6 +557,7 @@ public class PlayerController : MonoBehaviour
         _jumping = false; _jumpCut = false; _apexTimer = 0f;
         _bouncing = false; _pendingBounce = 0f; SetGroundCollider(null);
         _lastFallSpeed = 0f; _wasGrounded = false;
+        _autoDir = 1; _wallBounceLock = 0f;
         _squash = Vector2.one; _squashTimer = 0f;
         ApplyVisualTransform(Vector2.one);
         if (_visualSr != null) _visualSr.color = _sprites != null ? Color.white : BodyColor;
@@ -644,6 +678,12 @@ public class PlayerController : MonoBehaviour
             }
         }
         UpdateAnimation();
+        if (Translucent && _visualSr != null)
+        {
+            var c = _visualSr.color;
+            c.a = 0.10f + 0.25f * (0.5f + 0.5f * Mathf.Sin(Time.time * 7f));   // 0.10 ~ 0.35 사이로 깜빡임
+            _visualSr.color = c;
+        }
 
         for (int i = _dust.Count - 1; i >= 0; i--)
         {

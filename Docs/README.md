@@ -52,6 +52,7 @@
 
 | 날짜 | 변경 |
 |---|---|
+| 2026-09-06 | **뜻 6종 추가 + 조합 금지** (100 4.1, 202 2장): 과속·쉬지 않는 발·고무공·달 걷기·튕기는 몸·투명 인간 (`VowId` 9~14, `PlayerController` 손잡이 `AutoRun`/`AlwaysBounceFactor`/`WallBounceSpeed`/`Translucent`). `VowDef.Conflicts`(저속↔과속, 고중력↔달 걷기): 후보 뽑기는 충돌 없는 조합, 선택 UI 는 충돌 카드 어둡게 + 안내, 확정 시 `IsValidSet`, AutoPilot 은 `PickCompatible` |
 | 2026-09-06 | **시작 위치 배치 + 방 설정 '라운드마다 뜻 +1'**: 에디터 [시작 배치] 도구(`EditorTool.Start`, `MapData.StartPos` 미배치=(-1,-1)·`HasStart`·`EffectiveStartPos`), 시작·골 3u 거리 상호 검사, 시작 미배치 시 검증·제출 불가, 도구 열 7버튼(84px, 열 높이 유지), 플레이·썸네일은 맵의 시작 위치(100 5장·203·204). 방 설정 6종: `RoomSettings.VowPickIncrement`(Hello·CJ_Settings·CJ_Start 에 bool 추가), `GameFlow.VowPickCount` = 설정 + 라운드−1 (후보 수 상한) (100 7.1·201·204·205·SUMMARY) |
 | 2026-09-06 | QA 3건: 에디터 HUD 폰트를 Pretendard 로(WebGL 에서 검증·제출 등 한글이 비던 문제 — LegacyRuntime 은 OS 폴백 의존), **기본 경계 사방**(오른쪽 벽·천장 추가 — `MapLoader`, `CanvasView`; 100 5장·202·203), WebGL 닉네임 한글 입력 = 브라우저 prompt (`WebPrompt.cs`, 204 2.1) |
 | 2026-09-06 | **플레이어 스프라이트 교체** (102 1.1): `Art/Player/player_sheet.png` 4×4 시트 → [Chojiilgwan > Build Player Sprites] 로 슬라이스·`PlayerSpriteSet` 생성. `PlayerController` Idle/Walk/JumpUp/JumpDown 프레임 선택, 발 피벗 기준 비주얼 변환 통합(큰 몸집·스쿼시 호환), 세트 없으면 플레이스홀더 |

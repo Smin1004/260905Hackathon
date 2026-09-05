@@ -60,6 +60,12 @@ static class VowCatalog { List<VowDef> All; RandomCandidates(count); Apply(ids, 
 | 공중 제어 금지 | `AirControl` = false — 점프 순간 수평 속도가 착지까지 고정 |
 | 큰 몸집 | `ApplyBodyScale(1.5)` — 콜라이더·스프라이트 1.5배 |
 | 미끄러운 발 | `GroundAccelTime` 0.5 / `GroundDecelTime` 0.6 / `IdleFriction` 0.05 + 재질 갱신 |
+| 과속 | `MoveSpeed` ×1.6 |
+| 쉬지 않는 발 | `AutoRun` — Update 에서 입력 x 를 바라보는 방향으로 대체, 키는 방향 전환만 |
+| 고무공 | `AlwaysBounceFactor` 0.6 — 착지 스텝에 `_pendingBounce = 낙하속도×0.6/JumpSpeed` (초록 바운스와 같은 경로) |
+| 달 걷기 | `RiseGravity`/`FallGravity` ×0.5, `JumpSpeed` ×0.71 |
+| 튕기는 몸 | `WallBounceSpeed` 7 — `OnCollisionEnter2D` 옆면 노멀(|n.x|≥0.7) 접촉 시 반대 방향 속도 + 0.18s 수평 조작 잠금 |
+| 투명 인간 | `Translucent` — 매 프레임 알파 0.10~0.35 |
 
 - 적용 시점: **검증 모드 = 상대 뜻**(`MatchData.OpponentVows`), **교환 플레이 모드 = 자기 뜻**(`MatchData.MyVows`) — 아래 3장
 - 카운터형 상태(점프 횟수·쿨다운)는 컨트롤러가 리스폰 시 초기화
