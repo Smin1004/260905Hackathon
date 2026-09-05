@@ -48,7 +48,8 @@ public class MapEditorController : MonoBehaviour
     public float VerifiedParTime { get; private set; }
     public bool InVerification => _session != null;
     public PlaySession Session => _session;
-    public bool CanVerify => Map.HasGoal && Map.Strokes.Count > 0 && !InVerification && !Locked;
+    /// <summary>검증 버튼은 편집 가능한 동안 항상 눌 수 있다 (QA). 골·선이 없으면 StartVerification 이 상태 문구로 이유를 알린다. 비활성은 제출 버튼만.</summary>
+    public bool CanVerify => !InVerification && !Locked;
     public bool CanComplete => IsVerified && Map.HasGoal && Map.Strokes.Count > 0 && !InVerification && !Locked;
 
     /// <summary>제출 후 잠금 — 입력·UI 차단 (GameFlow 가 상대 대기 중 설정). Docs/100 6장 "제출 후 수정 불가".</summary>
