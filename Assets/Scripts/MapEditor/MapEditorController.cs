@@ -129,7 +129,7 @@ public class MapEditorController : MonoBehaviour
         if (_hud != null) _hud.Bind(this);
         else if (buildRuntimeUI) { _ui = gameObject.AddComponent<MapEditorUI>(); _ui.Bind(this); }
 
-        SetStatus("펜으로 선을 그리세요. 선이 곧 벽입니다. 골을 배치하고 검증 플레이로 클리어하면 완료할 수 있습니다.");
+        SetStatus("펜으로 선을 그리세요. 선이 곧 벽입니다. 골을 배치하고 검증 플레이로 클리어하면 제출할 수 있습니다.");
     }
 
     void Update()
@@ -496,7 +496,7 @@ public class MapEditorController : MonoBehaviour
         SetUiVisible(true);
         _pressedLastFrame = true;   // 복귀 클릭이 곧바로 펜 입력으로 새지 않게
 
-        if (IsVerified) SetStatus($"검증 성공 — 클리어 {VerifiedParTime:0.00}초 (패타임). [완료]로 확정할 수 있습니다. 맵을 수정하면 재검증이 필요합니다.");
+        if (IsVerified) SetStatus($"검증 성공 — 클리어 {VerifiedParTime:0.00}초 (패타임). [제출]로 확정할 수 있습니다. 맵을 수정하면 재검증이 필요합니다.");
         else if (timedOut) SetStatus("검증 실패 — 플레이 시간 만료. 맵을 수정한 뒤 다시 검증하세요 (검증 타이머는 새로 시작합니다).");
         else SetStatus("에디터로 돌아왔습니다. 맵을 수정한 뒤 다시 검증하세요.");
         VerificationChanged?.Invoke(false);
@@ -542,13 +542,13 @@ public class MapEditorController : MonoBehaviour
     /// </summary>
     public byte[] Complete()
     {
-        if (InVerification) { SetStatus("완료 불가: 검증 플레이 중입니다."); return null; }
+        if (InVerification) { SetStatus("제출 불가: 검증 플레이 중입니다."); return null; }
         if (_drawing) EndStroke();
         if (_erasing) EndErase();
 
-        if (!Map.HasGoal) { SetStatus("완료 불가: 골을 먼저 배치하세요."); return null; }
-        if (Map.Strokes.Count == 0) { SetStatus("완료 불가: 선을 하나 이상 그리세요."); return null; }
-        if (!IsVerified) { SetStatus("완료 불가: [검증 플레이]로 시작점→골 클리어를 먼저 증명하세요."); return null; }
+        if (!Map.HasGoal) { SetStatus("제출 불가: 골을 먼저 배치하세요."); return null; }
+        if (Map.Strokes.Count == 0) { SetStatus("제출 불가: 선을 하나 이상 그리세요."); return null; }
+        if (!IsVerified) { SetStatus("제출 불가: [검증 플레이]로 시작점→골 클리어를 먼저 증명하세요."); return null; }
 
         byte[] payload;
         MapData roundTrip;
@@ -559,14 +559,14 @@ public class MapEditorController : MonoBehaviour
         }
         catch (Exception e)
         {
-            SetStatus("완료 불가: 직렬화 오류 — " + e.Message);
+            SetStatus("제출 불가: 직렬화 오류 — " + e.Message);
             Debug.LogException(e);
             return null;
         }
 
         if (!MapData.ApproximatelyEqual(Map, roundTrip))
         {
-            SetStatus("완료 불가: 직렬화 왕복 검증 실패 (전송본이 원본과 다름). Console 확인.");
+            SetStatus("제출 불가: 직렬화 왕복 검증 실패 (전송본이 원본과 다름). Console 확인.");
             Debug.LogError("[MapEditor] round-trip mismatch\n" + MapSerializer.ToJson(Map) + "\n---\n" + MapSerializer.ToJson(roundTrip));
             return null;
         }
@@ -576,7 +576,7 @@ public class MapEditorController : MonoBehaviour
         LastPayload = payload;
         MatchData.Instance.MyMap = Map.Clone();
         MatchData.Instance.MyParTime = VerifiedParTime;
-        SetStatus($"완료 — 스트로크 {Map.Strokes.Count}, 점 {Map.TotalPoints}, 패타임 {VerifiedParTime:0.00}s, 전송 {payload.Length / 1024f:0.0} KB (청크 {chunks}개), 왕복 검증 OK{sizeWarn}");
+        SetStatus($"제출 — 스트로크 {Map.Strokes.Count}, 점 {Map.TotalPoints}, 패타임 {VerifiedParTime:0.00}s, 전송 {payload.Length / 1024f:0.0} KB (청크 {chunks}개), 왕복 검증 OK{sizeWarn}");
         Debug.Log("[MapEditor] " + Status);
         Completed?.Invoke(Map.Clone(), payload);
         Changed?.Invoke();

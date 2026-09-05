@@ -48,6 +48,7 @@ public class MapEditorHud : MonoBehaviour
     [SerializeField] HudToolButton penButton;
     [SerializeField] HudToolButton eraserButton;
     [SerializeField] HudToolButton undoButton;
+    [SerializeField] HudToolButton redoButton;
     [SerializeField] HudToolButton clearButton;
     [SerializeField] HudToolButton goalButton;
     [SerializeField] HudToolButton[] widthButtons;
@@ -124,6 +125,7 @@ public class MapEditorHud : MonoBehaviour
         Hook(penButton, () => _c.SetTool(EditorTool.Pen));
         Hook(eraserButton, () => _c.SetTool(EditorTool.Eraser));
         Hook(undoButton, () => _c.Undo());
+        Hook(redoButton, () => _c.Redo());
         Hook(clearButton, () => _c.ClearAll());
         Hook(goalButton, () => _c.SetTool(EditorTool.Goal));
         if (widthButtons != null)
@@ -154,9 +156,12 @@ public class MapEditorHud : MonoBehaviour
             go.name = "Swatch " + e.Name;
             go.SetActive(true);
             var v = new SwatchView { Rect = go.GetComponent<RectTransform>(), Circle = go.GetComponent<Image>() };
-            var check = go.transform.childCount > 0 ? go.transform.GetChild(0).GetComponent<Image>() : null;
+            var checkTr = go.transform.Find("Check");
+            var check = checkTr != null ? checkTr.GetComponent<Image>() : (go.transform.childCount > 0 ? go.transform.GetChild(0).GetComponent<Image>() : null);
             v.Check = check;
             v.Circle.color = e.Color;
+            var labelTr = go.transform.Find("Label");
+            if (labelTr != null) { var lt = labelTr.GetComponent<Text>(); if (lt != null) lt.text = FunctionName(e.ColorId); }   // (QA) 색상 설명
             if (check != null) check.color = Luma(e.Color) > 0.6f ? (Theme != null ? Theme.TextOnLight : Color.black) : Color.white;
             var btn = go.GetComponent<Button>();
             if (btn == null) btn = go.AddComponent<Button>();
@@ -179,6 +184,7 @@ public class MapEditorHud : MonoBehaviour
         Apply(eraserButton, _c.Tool == EditorTool.Eraser, editable);
         Apply(goalButton, _c.Tool == EditorTool.Goal, editable);
         Apply(undoButton, false, editable && _c.CanUndo);
+        Apply(redoButton, false, editable && _c.CanRedo);
         Apply(clearButton, false, editable && (_c.Map.Strokes.Count > 0 || _c.Map.HasGoal));
 
         if (widthButtons != null)
@@ -206,7 +212,7 @@ public class MapEditorHud : MonoBehaviour
         else if (_c.InVerification) { sub = "검증 플레이"; title = "시작점에서 골까지 도달하면 검증 성공"; }
         else if (_c.Tool == EditorTool.Goal) { sub = "골 배치"; title = "캔버스를 클릭해 골을 배치하세요"; subColor = Theme != null ? Theme.Warning : Color.red; }
         else if (_c.Tool == EditorTool.Eraser) { sub = "지우개"; title = "드래그한 부분의 선이 지워집니다"; }
-        else if (_c.IsVerified) { sub = "검증 클리어!"; title = "완료를 누르면 맵이 제출됩니다"; }
+        else if (_c.IsVerified) { sub = "검증 클리어!"; title = "제출을 누르면 맵이 상대에게 전송됩니다"; }
         else if (!_c.Map.HasGoal && _c.Map.Strokes.Count > 0) { sub = "지금은, 그릴 시간!"; title = "골을 배치해야 검증할 수 있습니다"; }
         else { sub = "지금은, 그릴 시간!"; title = "시작점에서 골까지 경로를 그려보세요"; }
         if (subtitleText != null) { subtitleText.text = sub; subtitleText.color = subColor; }
@@ -241,6 +247,21 @@ public class MapEditorHud : MonoBehaviour
     static void Apply(HudToolButton b, bool active, bool interactable) { if (b != null) b.Apply(active, interactable); }
 
     static float Luma(Color c) => 0.299f * c.r + 0.587f * c.g + 0.114f * c.b;
+
+    /// <summary>색상 → 게임 안 기능 이름 (Docs/101 1장, StrokeBehaviours 의 StrokeColorId 와 동일 번호)</summary>
+    static string FunctionName(int colorId)
+    {
+        switch (colorId)
+        {
+            case 0: return "벽";
+            case 1: return "은폐(예정)";
+            case 2: return "벽";
+            case 3: return "바운스";
+            case 4: return "얼음";
+            case 5: return "위험(사망)";
+            default: return "벽";
+        }
+    }
 
     // ------------------------------------------------------------------ per-frame: 타이머 · 카메라 맞춤 · 종이 프레임
 

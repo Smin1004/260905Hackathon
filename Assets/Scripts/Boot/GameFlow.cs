@@ -155,6 +155,7 @@ public class GameFlow : MonoBehaviour
             _roomCodeText.text = "방 코드: " + code;
             SetState(MatchState.WaitingOpponent);
             SetLobbyStatus("상대에게 방 코드를 알려주세요. 접속하면 자동으로 시작됩니다.");
+            SetLobbyInputsVisible(false);   // (QA) 방을 만든 뒤에는 참가 코드 입력·참가·방 만들기·닉네임을 숨긴다
             _lobbyLeaveBtn.gameObject.SetActive(true);
             if (_net.IsOpponentReady) OnOpponentReady(_net.OpponentNickname, _net.Settings);   // 대기 상태 전에 Hello 가 끝난 경우
         }
@@ -180,6 +181,7 @@ public class GameFlow : MonoBehaviour
             _roomCodeText.text = "방 코드: " + _net.RoomCode;
             SetState(MatchState.WaitingOpponent);
             SetLobbyStatus("호스트와 연결 중...");
+            SetLobbyInputsVisible(false);
             _lobbyLeaveBtn.gameObject.SetActive(true);
             if (_net.IsOpponentReady) OnOpponentReady(_net.OpponentNickname, _net.Settings);
         }
@@ -219,6 +221,7 @@ public class GameFlow : MonoBehaviour
         SetState(MatchState.Lobby);
         ShowPanel(_lobbyPanel);
         _roomCodeText.text = "";
+        SetLobbyInputsVisible(true);
         _lobbyLeaveBtn.gameObject.SetActive(false);
         SetLobbyStatus("방을 나왔습니다. 새 방을 만들거나 코드로 참가하세요.");
         SetLobbyButtons(true);
@@ -881,6 +884,15 @@ public class GameFlow : MonoBehaviour
     void SetWaitText(string s) { if (_waitText != null) _waitText.text = s; }
     void SetResultHint(string s) { if (_resultHint != null) _resultHint.text = s; }
     void SetLobbyButtons(bool on) { _createBtn.interactable = on && NetReady; _joinBtn.interactable = on && NetReady; }
+
+    /// <summary>방 생성·참가 뒤에는 입력 위젯(닉네임·방 만들기·코드·참가)을 숨기고 방 코드와 상태만 남긴다.</summary>
+    void SetLobbyInputsVisible(bool visible)
+    {
+        if (_nickInput != null) _nickInput.gameObject.SetActive(visible);
+        if (_createBtn != null) _createBtn.gameObject.SetActive(visible);
+        if (_codeInput != null) _codeInput.gameObject.SetActive(visible);
+        if (_joinBtn != null) _joinBtn.gameObject.SetActive(visible);
+    }
 
     static void EnsureEventSystem()
     {

@@ -27,7 +27,7 @@ public static class MapEditorHudBuilder
     const float MarginX = 240f;         // 좌우 여백
     const float TopBarH = 183f;         // 상단 바 높이 = 종이 슬롯 시작
     const float BottomH = 150f;         // 하단 바 높이 = 종이 슬롯 끝
-    const float ToolW = 120f;           // 오른쪽 도구 열 너비
+    const float ToolW = 170f;           // 오른쪽 도구 열 너비 (QA: 우측 인터페이스 확대)
     const float ToolGap = 19f;          // 종이와 도구 열 사이
     static float PaperRight => MarginX + ToolW + ToolGap;   // 종이 오른쪽 오프셋 (377)
 
@@ -205,15 +205,14 @@ public static class MapEditorHudBuilder
         Txt("RoundEn", top, "ROUND", 16, FontStyle.Bold, t.TextMuted, TextAnchor.MiddleLeft)
             .rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(MarginX + 122, -116), new Vector2(120, 24));
 
-        var subtitle = Txt("Subtitle", top, "지금은, 그릴 시간!", 20, FontStyle.Bold, t.Accent, TextAnchor.MiddleCenter);
-        subtitle.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -78), new Vector2(900, 28));
-        var title = Txt("Title", top, "시작점에서 골까지 경로를 그려보세요", 36, FontStyle.Bold, t.TextPrimary, TextAnchor.MiddleCenter);
-        title.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -104), new Vector2(1000, 48));
+        // (QA) 안내 문구(부제·제목)는 두지 않는다 — MapEditorHud 의 subtitleText/titleText 는 null 허용
+        Text subtitle = null, title = null;
 
         // 타이머
+        // (QA) 타이머 패널 확대 — 남은 시간이 잘 보이게
         var timer = Img("TimerPanel", top, S("panels/panel_dark"), Color.white, Image.Type.Sliced, 2.5f);
-        timer.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-MarginX, -79), new Vector2(176, 84));
-        var ringRect = new Vector2(62, 62);
+        timer.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-MarginX, -62), new Vector2(270, 112));
+        var ringRect = new Vector2(84, 84);
         Img("RingTrack", timer.transform, S("timer/timer_ring_track"), Color.white, Image.Type.Simple)
             .rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(14, 0), ringRect);
         var ringFill = Img("RingFill", timer.transform, S("timer/timer_ring_fill_normal"), Color.white, Image.Type.Filled);
@@ -222,45 +221,49 @@ public static class MapEditorHudBuilder
         ringFill.fillClockwise = true;
         ringFill.fillAmount = 1f;
         ringFill.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(14, 0), ringRect);
-        var timerNumber = Txt("TimerNumber", timer.transform, "56", 22, FontStyle.Bold, t.TextPrimary, TextAnchor.MiddleCenter);
+        var timerNumber = Txt("TimerNumber", timer.transform, "56", 28, FontStyle.Bold, t.TextPrimary, TextAnchor.MiddleCenter);
         timerNumber.rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(14, 0), ringRect);
-        Txt("RemainingLabel", timer.transform, "남은 시간", 15, FontStyle.Normal, t.TextMuted, TextAnchor.MiddleLeft)
-            .rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(88, -14), new Vector2(84, 18));
-        var timerRemaining = Txt("RemainingTime", timer.transform, "0:56", 30, FontStyle.Bold, t.Accent, TextAnchor.MiddleLeft);
-        timerRemaining.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(88, -32), new Vector2(84, 40));
+        Txt("RemainingLabel", timer.transform, "남은 시간", 18, FontStyle.Normal, t.TextMuted, TextAnchor.MiddleLeft)
+            .rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(112, -14), new Vector2(140, 22));
+        var timerRemaining = Txt("RemainingTime", timer.transform, "0:56", 46, FontStyle.Bold, t.Accent, TextAnchor.MiddleLeft);
+        timerRemaining.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(112, -38), new Vector2(150, 60));
 
         // ---- 도구 패널 (오른쪽 열)
         Sprite toolN = S("buttons/btn_tool_normal"), toolA = S("buttons/btn_tool_active"), toolD = S("buttons/btn_tool_disabled"), toolGoal = S("buttons/btn_tool_active_goal");
         var toolPanel = Img("ToolPanel", hc, S("panels/panel_dark"), Color.white, Image.Type.Sliced, 2.5f);
-        const float btnH = 85f, btnGap = 8f, pad = 14f;
+        const float btnH = 100f, btnGap = 8f, pad = 14f;   // (QA) 버튼 확대
         float y = -pad;
         var pen = ToolButton(toolPanel.transform, "Btn_Pen", y, S("icons/icon_pen"), "펜", toolN, toolA, toolD, t); y -= btnH + btnGap;
         var eraser = ToolButton(toolPanel.transform, "Btn_Eraser", y, null, "지우개", toolN, toolA, toolD, t); y -= btnH + btnGap;
         // 지우개 아이콘 에셋이 없어 기본 스프라이트(UISprite)를 기울인 블록으로 대신한다
         var eraserIcon = Img("Icon", eraser.transform, Builtin("UISprite.psd"), Color.white, Image.Type.Sliced);
-        eraserIcon.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 12), new Vector2(32, 20));
+        eraserIcon.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 14), new Vector2(44, 26));
         eraserIcon.rectTransform.localRotation = Quaternion.Euler(0, 0, -30);
         eraserIcon.raycastTarget = false;
         eraser.Icon = eraserIcon;
         var undo = ToolButton(toolPanel.transform, "Btn_Undo", y, S("icons/icon_undo"), "실행 취소", toolN, toolA, toolD, t); y -= btnH + btnGap;
+        // (QA) 다시 실행 버튼 — Ctrl+Y 와 같은 동작. 아이콘은 실행 취소 아이콘을 좌우 반전
+        var redo = ToolButton(toolPanel.transform, "Btn_Redo", y, S("icons/icon_undo"), "다시 실행", toolN, toolA, toolD, t); y -= btnH + btnGap;
+        if (redo.Icon != null) redo.Icon.rectTransform.localScale = new Vector3(-1, 1, 1);
         var clear = ToolButton(toolPanel.transform, "Btn_Clear", y, S("icons/icon_trash"), "전체 지우기", toolN, toolA, toolD, t); y -= btnH + btnGap;
         var divider = Img("Divider", toolPanel.transform, S("panels/divider"), Color.white, Image.Type.Simple);
-        divider.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, y + 2), new Vector2(92, 14));
+        divider.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, y + 2), new Vector2(140, 14));
         divider.raycastTarget = false;
         y -= 14 + 4;
+        // (QA) 골 배치는 다른 도구와 구분 — 평상시에도 코랄(경고) 색 아이콘·라벨, 선택 시 코랄 배경
         var goal = ToolButton(toolPanel.transform, "Btn_Goal", y, S("icons/icon_flag"), "골 배치", toolN, toolGoal, toolD, t); y -= btnH;
+        goal.ContentNormal = t.Warning;
         goal.ContentActive = Color.white;   // 코랄 배경 위 흰 아이콘
         float toolPanelH = -y + pad;
         toolPanel.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-MarginX, -TopBarH), new Vector2(ToolW, toolPanelH));
 
-        // ---- 완료 (도구 열 아래)
-        var complete = Chip(hc, "Btn_Complete", "완료", 22, new Vector2(ToolW, 60), toolA, toolA, toolD, t);
-        complete.Background.rectTransform.Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-MarginX, 44), new Vector2(ToolW, 60));
-        complete.ContentNormal = complete.ContentActive = t.TextOnLight;
+        // ---- (QA) 검증 → 제출: 빨간 원형 버튼 2개, 번호로 순서 표시. 제출은 검증 성공 후에만 활성
+        var complete = Circle(hc, "Btn_Complete", "② 제출", 26, 140, t);
+        complete.Background.rectTransform.Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-MarginX - (ToolW - 140) * 0.5f, 30), new Vector2(140, 140));
 
         // ---- 하단: 굵기·색상
         var options = Img("OptionsPanel", hc, S("panels/panel_dark"), Color.white, Image.Type.Sliced, 2.5f);
-        options.rectTransform.Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(MarginX, 44), new Vector2(560, 92));
+        options.rectTransform.Place(new Vector2(0, 0), new Vector2(0, 0), new Vector2(MarginX, 44), new Vector2(720, 100));
         Txt("WidthLabel", options.transform, "굵기", 16, FontStyle.Normal, t.TextMuted, TextAnchor.MiddleLeft)
             .rectTransform.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(18, 0), new Vector2(44, 24));
         string[] widthNames = { "얇게", "보통", "굵게" };
@@ -277,9 +280,9 @@ public static class MapEditorHudBuilder
         vdiv.raycastTarget = false;
 
         var swatchRoot = Rt("SwatchRoot", options.transform);
-        swatchRoot.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(292, 0), new Vector2(260, 60));
+        swatchRoot.Place(new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(292, 6), new Vector2(420, 60));
         var hlg = swatchRoot.gameObject.AddComponent<HorizontalLayoutGroup>();
-        hlg.spacing = 10; hlg.childAlignment = TextAnchor.MiddleLeft;
+        hlg.spacing = 36; hlg.childAlignment = TextAnchor.MiddleLeft;   // (QA) 스와치 아래 기능 이름 라벨이 들어갈 간격
         hlg.childControlWidth = hlg.childControlHeight = false;
         hlg.childForceExpandWidth = hlg.childForceExpandHeight = false;
         var swatch = Img("SwatchTemplate", swatchRoot, Builtin("Knob.psd"), Color.white, Image.Type.Simple);
@@ -289,12 +292,15 @@ public static class MapEditorHudBuilder
         var check = Img("Check", swatch.transform, S("icons/icon_check"), Color.white, Image.Type.Simple);
         check.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(18, 18));
         check.raycastTarget = false;
+        // (QA) 색상 설명: 스와치 아래 기능 이름 (MapEditorHud.BuildSwatches 가 채움)
+        var swatchLabel = Txt("Label", swatch.transform, "", 13, FontStyle.Bold, t.TextMuted, TextAnchor.UpperCenter);
+        swatchLabel.rectTransform.Place(new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, -4), new Vector2(70, 16));
         swatch.gameObject.SetActive(false);
 
         // ---- 하단: 상태 칩
         var status = Img("StatusChip", hc, S("panels/panel_chip_light"), Color.white, Image.Type.Sliced, 2f);
         status.rectTransform.anchorMin = new Vector2(0, 0); status.rectTransform.anchorMax = new Vector2(1, 0); status.rectTransform.pivot = new Vector2(0.5f, 0);
-        status.rectTransform.offsetMin = new Vector2(MarginX + 580, 44);
+        status.rectTransform.offsetMin = new Vector2(MarginX + 740, 44);
         status.rectTransform.offsetMax = new Vector2(-(PaperRight + 250 + 16), 44 + 92);
         var statusText = Txt("StatusText", status.transform, "", 15, FontStyle.Bold, t.TextOnLight, TextAnchor.MiddleLeft);
         statusText.rectTransform.anchorMin = new Vector2(0, 0.38f); statusText.rectTransform.anchorMax = new Vector2(1, 1);
@@ -306,19 +312,9 @@ public static class MapEditorHudBuilder
         statsText.rectTransform.offsetMin = new Vector2(20, 8); statsText.rectTransform.offsetMax = new Vector2(-20, 0);
         statsText.horizontalOverflow = HorizontalWrapMode.Wrap; statsText.verticalOverflow = VerticalWrapMode.Truncate;
 
-        // ---- 하단: 검증하기
-        var verify = Chip(hc, "Btn_Verify", "검증하기", 26, new Vector2(250, 100), S("buttons/btn_verify_active_blank"), S("buttons/btn_verify_active_blank"), S("buttons/btn_verify_disabled_blank"), t, 2.5f);
-        verify.Background.rectTransform.Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-PaperRight, 36), new Vector2(250, 100));
-        verify.ContentNormal = verify.ContentActive = t.TextOnLight;
-        verify.ContentDisabled = t.TextMuted;
-        verify.Label.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(16, 6), new Vector2(150, 40));
-        var vcheck = Img("Icon", verify.transform, S("icons/icon_check"), t.TextOnLight, Image.Type.Simple);
-        vcheck.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-56, 6), new Vector2(28, 28));
-        vcheck.raycastTarget = false;
-        verify.Icon = vcheck;
-        var vb = verify.Button;
-        vb.transition = Selectable.Transition.SpriteSwap;
-        vb.spriteState = new SpriteState { pressedSprite = S("buttons/btn_verify_pressed_blank"), disabledSprite = S("buttons/btn_verify_disabled_blank") };
+        // ---- 하단: 검증 (빨간 원형, 제출 왼쪽)
+        var verify = Circle(hc, "Btn_Verify", "① 검증", 26, 140, t);
+        verify.Background.rectTransform.Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-PaperRight - 24, 30), new Vector2(140, 140));
 
         // ---------- 참조 연결
         so.FindProperty("backCanvas").objectReferenceValue = back;
@@ -336,6 +332,7 @@ public static class MapEditorHudBuilder
         so.FindProperty("penButton").objectReferenceValue = pen;
         so.FindProperty("eraserButton").objectReferenceValue = eraser;
         so.FindProperty("undoButton").objectReferenceValue = undo;
+        so.FindProperty("redoButton").objectReferenceValue = redo;
         so.FindProperty("clearButton").objectReferenceValue = clear;
         so.FindProperty("goalButton").objectReferenceValue = goal;
         var wp = so.FindProperty("widthButtons"); wp.arraySize = widthBtns.Length;
@@ -445,7 +442,7 @@ public static class MapEditorHudBuilder
     static HudToolButton ToolButton(Transform parent, string name, float y, Sprite icon, string label, Sprite normal, Sprite active, Sprite disabled, MapEditorTheme t)
     {
         var bg = Img(name, parent, normal, Color.white, Image.Type.Sliced, 2.8f);
-        bg.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(92, 85));
+        bg.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, y), new Vector2(140, 100));
         var btn = bg.gameObject.AddComponent<Button>();
         btn.targetGraphic = bg;
         Tint(btn);
@@ -456,13 +453,13 @@ public static class MapEditorHudBuilder
         if (icon != null)
         {
             var ic = Img("Icon", bg.transform, icon, Color.white, Image.Type.Simple);
-            ic.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 12), new Vector2(32, 32));
+            ic.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 14), new Vector2(44, 44));
             ic.raycastTarget = false;
             tb.Icon = ic;
         }
-        var lb = Txt("Label", bg.transform, label, 14, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+        var lb = Txt("Label", bg.transform, label, 18, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
         lb.rectTransform.anchorMin = new Vector2(0, 0); lb.rectTransform.anchorMax = new Vector2(1, 0); lb.rectTransform.pivot = new Vector2(0.5f, 0);
-        lb.rectTransform.anchoredPosition = new Vector2(0, 10); lb.rectTransform.sizeDelta = new Vector2(0, 18);
+        lb.rectTransform.anchoredPosition = new Vector2(0, 10); lb.rectTransform.sizeDelta = new Vector2(0, 22);
         tb.Label = lb;
         return tb;
     }
@@ -479,6 +476,31 @@ public static class MapEditorHudBuilder
         tb.Button = btn; tb.Background = bg;
         tb.Normal = normal; tb.Active = active; tb.Disabled = disabled;
         tb.ContentNormal = t.TextPrimary; tb.ContentActive = t.TextOnLight; tb.ContentDisabled = t.IconDisabled;
+        var lb = Txt("Label", bg.transform, label, fontSize, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+        lb.rectTransform.Stretch();
+        tb.Label = lb;
+        return tb;
+    }
+
+    /// <summary>(QA) 빨간 원형 버튼 — 검증·제출. 기본 Knob 스프라이트를 상태별 색으로 칠한다 (활성 코랄, 비활성 회색).</summary>
+    static HudToolButton Circle(Transform parent, string name, string label, int fontSize, float diameter, MapEditorTheme t)
+    {
+        var knob = Builtin("Knob.psd");
+        var bg = Img(name, parent, knob, t.Warning, Image.Type.Simple);
+        bg.preserveAspect = true;
+        bg.rectTransform.sizeDelta = new Vector2(diameter, diameter);
+        var btn = bg.gameObject.AddComponent<Button>();
+        btn.targetGraphic = bg;
+        Tint(btn);
+        var tb = bg.gameObject.AddComponent<HudToolButton>();
+        tb.Button = btn; tb.Background = bg;
+        tb.Normal = tb.Active = tb.Disabled = knob;
+        tb.TintBackground = true;
+        tb.BackgroundNormal = t.Warning;
+        tb.BackgroundActive = t.Warning;
+        tb.BackgroundDisabled = new Color(0.30f, 0.32f, 0.38f);
+        tb.ContentNormal = tb.ContentActive = Color.white;
+        tb.ContentDisabled = t.IconDisabled;
         var lb = Txt("Label", bg.transform, label, fontSize, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
         lb.rectTransform.Stretch();
         tb.Label = lb;

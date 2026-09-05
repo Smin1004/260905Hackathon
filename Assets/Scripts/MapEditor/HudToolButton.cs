@@ -18,6 +18,12 @@ public class HudToolButton : MonoBehaviour
     public Sprite Active;
     public Sprite Disabled;
 
+    [Header("배경 색 (TintBackground 일 때 상태별로 배경 색을 바꿈 — 원형 버튼 등 스프라이트가 하나뿐일 때)")]
+    public bool TintBackground = false;
+    public Color BackgroundNormal = Color.white;
+    public Color BackgroundActive = Color.white;
+    public Color BackgroundDisabled = Color.gray;
+
     [Header("아이콘·라벨 색")]
     public Color ContentNormal = Color.white;
     public Color ContentActive = new Color32(18, 37, 60, 255);
@@ -33,6 +39,7 @@ public class HudToolButton : MonoBehaviour
         {
             var s = !interactable ? Disabled : active ? Active : Normal;
             if (s != null) Background.sprite = s;
+            if (TintBackground) Background.color = !interactable ? BackgroundDisabled : active ? BackgroundActive : BackgroundNormal;
         }
         var c = !interactable ? ContentDisabled : active ? ContentActive : ContentNormal;
         if (Icon != null) Icon.color = c;
