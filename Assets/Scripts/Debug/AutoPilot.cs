@@ -69,8 +69,15 @@ public class AutoPilot : MonoBehaviour
         if (_flow.State == MatchState.Lobby) { Log("실패: 방 생성/참가 안 됨 — " + _flow.LastError); yield break; }
         if (_host) Log("ROOM CODE: " + NetService.Instance.RoomCode);
 
-        // 상대 접속 → MapEdit
-        while (_flow != null && _flow.State == MatchState.WaitingOpponent) yield return null;
+        // 방 화면: 호스트는 상대가 들어오면 [게임 시작], 참가자는 호스트의 시작을 기다린다
+        if (_host)
+        {
+            while (_flow != null && _flow.State == MatchState.RoomLobby && !_flow.OpponentConnected) yield return null;
+            if (_flow == null) yield break;
+            yield return new WaitForSeconds(0.5f);
+            if (_flow.State == MatchState.RoomLobby) { Log("게임 시작"); _flow.StartGame(); }
+        }
+        while (_flow != null && _flow.State == MatchState.RoomLobby) yield return null;
         if (_flow == null) yield break;
 
         for (int round = 1; round <= _rounds; round++)

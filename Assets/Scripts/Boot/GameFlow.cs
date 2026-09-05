@@ -4,12 +4,12 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public enum MatchState { Lobby, WaitingOpponent, VowSelect, MapEdit, WaitingSubmit, ExchangePlay, WaitingResult, Result, WaitingNextRound, Aborted }
+public enum MatchState { Lobby, RoomLobby, VowSelect, MapEdit, WaitingSubmit, ExchangePlay, WaitingResult, Result, WaitingNextRound, Aborted }
 
 /// <summary>
 /// 매치 흐름 FSM (Boot 씬, Docs/205 4장). Boot 씬은 항상 남고 MapEditor / Play 씬을 애디티브로 얹는다.
 ///
-///   Lobby → (방 생성/참가) → WaitingOpponent → (Hello 교환) → VowSelect (각자 뜻 선택, 양쪽 확정·교환) → MapEdit
+///   Lobby → (방 생성/참가) → RoomLobby (방 화면: 코드·플레이어·방 설정. Hello 교환 후 호스트 [게임 시작]) → VowSelect (각자 뜻 선택, 양쪽 확정·교환) → MapEdit
 ///   → (내 맵 완료: 전송 + 잠금) WaitingSubmit → (내 제출 + 상대 맵 수신) ExchangePlay
 ///   → (내 플레이 종료: 결과 전송) WaitingResult → (상대 결과 수신) Result
 ///   → [다음 라운드] 양쪽 준비 → 같은 방에서 MapEdit 부터 다시 (라운드 반복 — 방을 새로 만들지 않는다)
@@ -58,7 +58,11 @@ public class GameFlow : MonoBehaviour
 
     // UI
     Canvas _canvas;
-    GameObject _lobbyPanel, _waitPanel, _resultPanel;
+    GameObject _lobbyPanel, _waitPanel, _resultPanel, _roomPanel;
+    Text _roomCodeBig, _roomHostText, _roomGuestText, _roomStatus, _roomHint;
+    Button _startBtn, _copyCodeBtn;
+    readonly System.Collections.Generic.List<SettingRow> _settingRows = new System.Collections.Generic.List<SettingRow>();
+    class SettingRow { public string Name; public Text Value; public Button Prev, Next; public Func<int[]> Options; public Func<int> Get; public Action<int> Set; public Func<int, string> Format; }
     Text _lobbyStatus, _roomCodeText, _waitText, _resultTitle, _resultBody, _roomBarText, _scoreText;
     InputField _nickInput, _codeInput;
     Button _createBtn, _joinBtn, _lobbyLeaveBtn, _nextRoundBtn, _resultLeaveBtn, _waitNewBtn, _roomBarLeaveBtn;
@@ -90,6 +94,8 @@ public class GameFlow : MonoBehaviour
         _net.SubmitFailedReceived += OnOpponentForfeit;
         _net.VowsReceived += OnOpponentVows;
         _net.MatchAborted += OnMatchAborted;
+        _net.SettingsReceived += OnSettingsReceived;
+        _net.StartReceived += OnStartReceived;
         PlayBootstrap.Finished += OnMyPlayFinished;
 
         EnsureEventSystem();
@@ -130,6 +136,8 @@ public class GameFlow : MonoBehaviour
             _net.SubmitFailedReceived -= OnOpponentForfeit;
             _net.VowsReceived -= OnOpponentVows;
             _net.MatchAborted -= OnMatchAborted;
+            _net.SettingsReceived -= OnSettingsReceived;
+            _net.StartReceived -= OnStartReceived;
         }
         PlayBootstrap.Finished -= OnMyPlayFinished;
         if (Instance == this) Instance = null;
@@ -152,11 +160,10 @@ public class GameFlow : MonoBehaviour
             _data.MyNickname = Nickname = ReadNickname("플레이어1");
             string code = await _net.CreateRoom(_data.Settings, Nickname);
             if (this == null) return;
-            _roomCodeText.text = "방 코드: " + code;
-            SetState(MatchState.WaitingOpponent);
-            SetLobbyStatus("상대에게 방 코드를 알려주세요. 접속하면 자동으로 시작됩니다.");
-            SetLobbyInputsVisible(false);   // (QA) 방을 만든 뒤에는 참가 코드 입력·참가·방 만들기·닉네임을 숨긴다
-            _lobbyLeaveBtn.gameObject.SetActive(true);
+            SetState(MatchState.RoomLobby);
+            ShowPanel(_roomPanel);
+            SetRoomStatus("상대에게 방 코드를 알려주세요. 상대가 들어오면 [게임 시작]을 누를 수 있습니다.");
+            RefreshRoomPanel();
             if (_net.IsOpponentReady) OnOpponentReady(_net.OpponentNickname, _net.Settings);   // 대기 상태 전에 Hello 가 끝난 경우
         }
         catch (Exception e)
@@ -178,11 +185,10 @@ public class GameFlow : MonoBehaviour
             _data.MyNickname = Nickname = ReadNickname("플레이어2");
             await _net.JoinRoom(code, Nickname);
             if (this == null) return;
-            _roomCodeText.text = "방 코드: " + _net.RoomCode;
-            SetState(MatchState.WaitingOpponent);
-            SetLobbyStatus("호스트와 연결 중...");
-            SetLobbyInputsVisible(false);
-            _lobbyLeaveBtn.gameObject.SetActive(true);
+            SetState(MatchState.RoomLobby);
+            ShowPanel(_roomPanel);
+            SetRoomStatus("호스트와 연결 중...");
+            RefreshRoomPanel();
             if (_net.IsOpponentReady) OnOpponentReady(_net.OpponentNickname, _net.Settings);
         }
         catch (Exception e)
@@ -220,9 +226,6 @@ public class GameFlow : MonoBehaviour
         ResetAll();
         SetState(MatchState.Lobby);
         ShowPanel(_lobbyPanel);
-        _roomCodeText.text = "";
-        SetLobbyInputsVisible(true);
-        _lobbyLeaveBtn.gameObject.SetActive(false);
         SetLobbyStatus("방을 나왔습니다. 새 방을 만들거나 코드로 참가하세요.");
         SetLobbyButtons(true);
         _leaving = false;
@@ -251,11 +254,10 @@ public class GameFlow : MonoBehaviour
         _myRoundWins = _theirRoundWins = _roundDraws = 0; _tallyAppliedRound = 0;
         Round = 1;
         LastError = "";
-        SetState(MatchState.WaitingOpponent);
-        ShowPanel(_lobbyPanel);
-        _roomCodeText.text = "방 코드: " + _net.RoomCode;
-        _lobbyLeaveBtn.gameObject.SetActive(true);
-        SetLobbyStatus("상대가 나갔습니다. 같은 방 코드로 새 상대를 기다립니다.");
+        SetState(MatchState.RoomLobby);
+        ShowPanel(_roomPanel);
+        SetRoomStatus("상대가 나갔습니다. 같은 방 코드로 새 상대를 기다립니다.");
+        RefreshRoomPanel();
     }
 
     string ReadNickname(string fallback)
@@ -267,18 +269,49 @@ public class GameFlow : MonoBehaviour
 
     // ------------------------------------------------------------------ net events
 
-    void OnNetStatus(string s) { if (State == MatchState.Lobby || State == MatchState.WaitingOpponent) SetLobbyStatus(s); }
+    void OnNetStatus(string s)
+    {
+        if (State == MatchState.Lobby) SetLobbyStatus(s);
+        else if (State == MatchState.RoomLobby) SetRoomStatus(s);
+    }
 
     void OnOpponentReady(string nickname, RoomSettings settings)
     {
         _data.OpponentNickname = nickname;
-        _data.Settings = settings;
-        if (_editorLoadStarted || _leaving || State == MatchState.Aborted) return;
-        if (State == MatchState.WaitingOpponent || (State == MatchState.Lobby && _busy))
+        if (!_net.IsHost) _data.Settings = settings;   // 참가자는 호스트 값을 받는다. 호스트는 자기 값 유지 (같은 객체)
+        if (_leaving || State == MatchState.Aborted) return;
+        if (State == MatchState.RoomLobby || (State == MatchState.Lobby && _busy))
         {
-            _editorLoadStarted = true;   // 이 라운드의 진입은 한 번만
-            StartVowSelect();
+            SetRoomStatus(_net.IsHost ? $"{nickname} 님이 들어왔습니다. 설정을 확인하고 [게임 시작]을 누르세요." : "연결 완료. 방장이 게임을 시작하면 뜻 선택으로 넘어갑니다.");
+            RefreshRoomPanel();
         }
+    }
+
+    /// <summary>상대(참가자)가 연결되어 Hello 교환까지 끝났는가 — AutoPilot·방 화면 시작 버튼 조건</summary>
+    public bool OpponentConnected => _net != null && _net.IsOpponentReady;
+
+    /// <summary>[게임 시작] — 호스트 전용. 상대가 연결돼 있어야 한다. 최종 설정을 실어 보내고 양쪽이 뜻 선택으로.</summary>
+    public bool StartGame()
+    {
+        if (State != MatchState.RoomLobby || _leaving || !_net.IsHost || !_net.IsOpponentReady || _editorLoadStarted) return false;
+        _editorLoadStarted = true;   // 이 라운드의 진입은 한 번만
+        _net.SendStart(_data.Settings);
+        StartVowSelect();
+        return true;
+    }
+
+    void OnStartReceived(RoomSettings settings)
+    {
+        if (_leaving || State != MatchState.RoomLobby || _editorLoadStarted) return;
+        _data.Settings = settings;
+        _editorLoadStarted = true;
+        StartVowSelect();
+    }
+
+    void OnSettingsReceived(RoomSettings settings)
+    {
+        _data.Settings = settings;
+        if (State == MatchState.RoomLobby) RefreshRoomPanel();
     }
 
     // ------------------------------------------------------------------ 뜻 선택 (Docs/100 4.1)
@@ -485,7 +518,7 @@ public class GameFlow : MonoBehaviour
 
     void OnOpponentForfeit()
     {
-        if (_leaving || State == MatchState.Aborted || State == MatchState.Lobby || State == MatchState.WaitingOpponent) return;
+        if (_leaving || State == MatchState.Aborted || State == MatchState.Lobby || State == MatchState.RoomLobby) return;
         if (State != MatchState.MapEdit && State != MatchState.WaitingSubmit && State != MatchState.Result) return;
         _forfeitTheirs = true;
         _drawDeadline = -1f;
@@ -778,10 +811,11 @@ public class GameFlow : MonoBehaviour
         _joinBtn = RuntimeUI.Button(lp, new Vector2(0.56f, 0.44f), new Vector2(0.70f, 0.51f), "참가", () => JoinRoom(_codeInput.text), new Color(0.20f, 0.65f, 0.40f), 26);
         _createBtn.interactable = false; _joinBtn.interactable = false;
 
-        _roomCodeText = RuntimeUI.Label(lp, new Vector2(0f, 0.30f), new Vector2(1f, 0.40f), "", 56, TextAnchor.MiddleCenter, new Color(0.5f, 1f, 0.6f), FontStyle.Bold);
-        _lobbyStatus = RuntimeUI.Label(lp, new Vector2(0.1f, 0.18f), new Vector2(0.9f, 0.29f), "Unity Services 초기화 중...", 24, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.55f));
-        _lobbyLeaveBtn = RuntimeUI.Button(lp, new Vector2(0.40f, 0.08f), new Vector2(0.60f, 0.15f), "방 나가기", LeaveRoom, new Color(0.6f, 0.3f, 0.3f), 24);
-        _lobbyLeaveBtn.gameObject.SetActive(false);
+        _roomCodeText = null;   // 방 코드는 방 화면(_roomPanel)에서 표시
+        _lobbyStatus = RuntimeUI.Label(lp, new Vector2(0.1f, 0.26f), new Vector2(0.9f, 0.38f), "Unity Services 초기화 중...", 24, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.55f));
+        _lobbyLeaveBtn = null;
+
+        BuildRoomPanel(root);
 
         // ---- 대기 오버레이 (MapEditor / Play 위)
         _waitPanel = RuntimeUI.Panel(root, new Vector2(0.2f, 0.40f), new Vector2(0.8f, 0.60f), new Color(0.05f, 0.05f, 0.08f, 0.92f)).gameObject;
@@ -885,13 +919,114 @@ public class GameFlow : MonoBehaviour
         if (_thumbRow != null) _thumbRow.SetActive(false);
     }
 
+    // ------------------------------------------------------------------ 방 화면 (Docs/204 2.1b) — 코드·플레이어·방 설정·시작
+
+    static readonly int[] AttemptOptions = { 0, 3, 5 };
+    static readonly int[] DrawTimeOptions = { 120, 300, 600 };
+    static readonly int[] PlayTimeOptions = { 120, 180, 300 };
+    static readonly int[] PickOptions = { 1, 2, 3 };
+    static readonly int[] CandidateOptions = { 3, 5, 8, 0 };
+
+    void BuildRoomPanel(Transform root)
+    {
+        _roomPanel = RuntimeUI.Panel(root, Vector2.zero, Vector2.one, new Color(0.10f, 0.11f, 0.14f)).gameObject;
+        var rp = _roomPanel.transform;
+        RuntimeUI.Label(rp, new Vector2(0f, 0.90f), new Vector2(1f, 0.97f), "방", 30, TextAnchor.MiddleCenter, new Color(0.8f, 0.8f, 0.85f));
+        _roomCodeBig = RuntimeUI.Label(rp, new Vector2(0f, 0.80f), new Vector2(1f, 0.91f), "", 72, TextAnchor.MiddleCenter, new Color(0.5f, 1f, 0.6f), FontStyle.Bold);
+        _copyCodeBtn = RuntimeUI.Button(rp, new Vector2(0.76f, 0.83f), new Vector2(0.85f, 0.88f), "코드 복사", CopyRoomCode, new Color(0.25f, 0.30f, 0.40f), 18);
+
+        // 플레이어 2칸
+        var players = RuntimeUI.Panel(rp, new Vector2(0.08f, 0.62f), new Vector2(0.46f, 0.77f), new Color(0.14f, 0.16f, 0.21f));
+        RuntimeUI.Label(players, new Vector2(0.05f, 0.70f), new Vector2(0.95f, 0.98f), "플레이어", 20, TextAnchor.MiddleLeft, Color.gray);
+        _roomHostText = RuntimeUI.Label(players, new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.68f), "", 26, TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
+        _roomGuestText = RuntimeUI.Label(players, new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.36f), "", 26, TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
+
+        // 방 설정 5종 (Docs/100 7.1) — 호스트만 조작, 참가자는 표시만
+        var settings = RuntimeUI.Panel(rp, new Vector2(0.50f, 0.30f), new Vector2(0.92f, 0.77f), new Color(0.14f, 0.16f, 0.21f));
+        RuntimeUI.Label(settings, new Vector2(0.05f, 0.88f), new Vector2(0.95f, 0.98f), "방 설정", 20, TextAnchor.MiddleLeft, Color.gray);
+        _settingRows.Clear();
+        AddSettingRow(settings, 0, "시도 제한", () => AttemptOptions, () => _data.Settings.AttemptLimit, v => _data.Settings.AttemptLimit = v, v => v == 0 ? "무한" : $"{v}회");
+        AddSettingRow(settings, 1, "그리기 시간", () => DrawTimeOptions, () => _data.Settings.DrawTimeLimit, v => _data.Settings.DrawTimeLimit = v, v => $"{v / 60}분");
+        AddSettingRow(settings, 2, "플레이 시간", () => PlayTimeOptions, () => _data.Settings.PlayTimeLimit, v => _data.Settings.PlayTimeLimit = v, v => $"{v / 60}분");
+        AddSettingRow(settings, 3, "뜻 개수", () => PickOptions, () => _data.Settings.VowPickCount, v => _data.Settings.VowPickCount = v, v => $"{v}개");
+        AddSettingRow(settings, 4, "뜻 후보 수", () => CandidateOptions, () => _data.Settings.VowCandidateCount, v => _data.Settings.VowCandidateCount = v, v => v == 0 ? "전체" : $"{v}개");
+        _roomHint = RuntimeUI.Label(rp, new Vector2(0.08f, 0.30f), new Vector2(0.46f, 0.60f), "", 20, TextAnchor.UpperLeft, new Color(0.75f, 0.78f, 0.85f));
+
+        _roomStatus = RuntimeUI.Label(rp, new Vector2(0.08f, 0.20f), new Vector2(0.92f, 0.28f), "", 22, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.55f));
+        _startBtn = RuntimeUI.Button(rp, new Vector2(0.30f, 0.08f), new Vector2(0.58f, 0.17f), "게임 시작", () => StartGame(), new Color(0.20f, 0.65f, 0.40f), 30);
+        RuntimeUI.Button(rp, new Vector2(0.60f, 0.08f), new Vector2(0.70f, 0.17f), "방 나가기", LeaveRoom, new Color(0.6f, 0.3f, 0.3f), 22);
+        _roomPanel.SetActive(false);
+    }
+
+    void AddSettingRow(Transform parent, int index, string name, Func<int[]> options, Func<int> get, Action<int> set, Func<int, string> format)
+    {
+        float top = 0.84f - index * 0.155f, bottom = top - 0.13f;
+        RuntimeUI.Label(parent, new Vector2(0.05f, bottom), new Vector2(0.45f, top), name, 24, TextAnchor.MiddleLeft, Color.white);
+        var row = new SettingRow { Name = name, Options = options, Get = get, Set = set, Format = format };
+        row.Prev = RuntimeUI.Button(parent, new Vector2(0.50f, bottom + 0.015f), new Vector2(0.58f, top - 0.015f), "<", () => CycleSetting(row, -1), new Color(0.25f, 0.30f, 0.40f), 22);
+        row.Value = RuntimeUI.Label(parent, new Vector2(0.59f, bottom), new Vector2(0.84f, top), "", 26, TextAnchor.MiddleCenter, new Color(0.5f, 1f, 0.6f), FontStyle.Bold);
+        row.Next = RuntimeUI.Button(parent, new Vector2(0.85f, bottom + 0.015f), new Vector2(0.93f, top - 0.015f), ">", () => CycleSetting(row, +1), new Color(0.25f, 0.30f, 0.40f), 22);
+        _settingRows.Add(row);
+    }
+
+    void CycleSetting(SettingRow row, int dir)
+    {
+        if (State != MatchState.RoomLobby || !_net.IsHost) return;
+        var opts = row.Options();
+        int cur = row.Get(), idx = Array.IndexOf(opts, cur);
+        if (idx < 0) idx = 0; else idx = (idx + dir + opts.Length) % opts.Length;
+        row.Set(opts[idx]);
+        // 뜻 개수는 후보 수를 넘을 수 없다 (후보 0 = 전체 8개)
+        int cand = _data.Settings.VowCandidateCount == 0 ? VowCatalog.All.Count : _data.Settings.VowCandidateCount;
+        if (_data.Settings.VowPickCount > cand) _data.Settings.VowPickCount = cand;
+        _net.SendSettings(_data.Settings);
+        RefreshRoomPanel();
+    }
+
+    void CopyRoomCode()
+    {
+        var code = _net != null ? _net.RoomCode : null;
+        if (string.IsNullOrEmpty(code)) return;
+        GUIUtility.systemCopyBuffer = code;
+        SetRoomStatus($"방 코드 {code} 를 복사했습니다.");
+    }
+
+    /// <summary>방 화면의 코드·플레이어·설정·버튼 상태를 현재 데이터로 다시 그린다.</summary>
+    void RefreshRoomPanel()
+    {
+        if (_roomPanel == null) return;
+        bool host = _net != null && _net.IsHost;
+        bool opp = OpponentConnected;
+        string code = _net != null ? _net.RoomCode : null;
+        _roomCodeBig.text = string.IsNullOrEmpty(code) ? "..." : $"방 코드  {code}";
+        string me = _data.MyNickname, them = opp && !string.IsNullOrEmpty(_data.OpponentNickname) ? _data.OpponentNickname : null;
+        string waiting = "<color=#8A93A3>대기 중...</color>";
+        _roomHostText.text = "방장  " + (host ? $"{me} <color=#8CFFA6>(나)</color>" : (them ?? waiting));
+        _roomGuestText.text = "참가자  " + (host ? (them ?? waiting) : $"{me} <color=#8CFFA6>(나)</color>");
+        _roomHostText.supportRichText = _roomGuestText.supportRichText = true;
+        foreach (var r in _settingRows)
+        {
+            r.Value.text = r.Format(r.Get());
+            r.Prev.gameObject.SetActive(host); r.Next.gameObject.SetActive(host);
+        }
+        _roomHint.text = host
+            ? "설정은 방장만 바꿀 수 있고 참가자 화면에 바로 반영됩니다.\n\n• 시도 제한·플레이 시간: 교환 플레이에만 적용\n• 그리기 시간: 검증 플레이까지 포함한 라운드 제작 시간\n• 뜻 개수·후보 수: 라운드마다 각자 고르는 뜻"
+            : "방장이 설정을 정하고 [게임 시작]을 누르면 뜻 선택으로 넘어갑니다.\n\n• 시도 제한·플레이 시간: 교환 플레이에만 적용\n• 그리기 시간: 검증 플레이까지 포함한 라운드 제작 시간";
+        _startBtn.gameObject.SetActive(host);
+        _startBtn.interactable = host && opp && State == MatchState.RoomLobby;
+        _startBtn.GetComponentInChildren<Text>().text = opp ? "게임 시작" : "상대를 기다리는 중...";
+    }
+
     void ShowPanel(GameObject panel)
     {
         _lobbyPanel.SetActive(panel == _lobbyPanel);
         _waitPanel.SetActive(panel == _waitPanel);
         _resultPanel.SetActive(panel == _resultPanel);
         if (_vowPanel != null) _vowPanel.SetActive(panel == _vowPanel);
+        if (_roomPanel != null) _roomPanel.SetActive(panel == _roomPanel);
     }
+
+    void SetRoomStatus(string s) { if (_roomStatus != null) _roomStatus.text = s; }
 
     void SetRoomBarVisible(bool visible)
     {

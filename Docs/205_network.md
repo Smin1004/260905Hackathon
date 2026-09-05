@@ -58,7 +58,7 @@ VowCandidateCount : int   (기본 5 — 뜻 후보 수, 0=전체)
 ## 4. 매치 흐름 FSM (Boot 소유, 통합 담당 — `GameFlow.MatchState`)
 
 ```
-Lobby → WaitingOpponent → VowSelect → MapEdit → WaitingSubmit → ExchangePlay → WaitingResult → Result → WaitingNextRound ─┐
+Lobby → RoomLobby → VowSelect → MapEdit → WaitingSubmit → ExchangePlay → WaitingResult → Result → WaitingNextRound ─┐
                               ↑                                                                                          │
                               └──────────────────────── (Round+1, 같은 방) ───────────────────────────────────────────────┘
 어느 상태에서든 → Aborted (연결 끊김 / 방 나가기)
@@ -67,7 +67,7 @@ Lobby → WaitingOpponent → VowSelect → MapEdit → WaitingSubmit → Exchan
 | 상태 | 진입·전환 조건 | 화면 |
 |---|---|---|
 | Lobby | 초기 상태·복귀 상태. [방 만들기] / 코드 [참가] | Boot 로비 패널 |
-| WaitingOpponent | 방 생성·참가 직후. **Hello 교환 완료**(`OpponentReady`) → VowSelect | Boot 로비 패널 (방 코드 표시) |
+| RoomLobby | 방 생성·참가 직후의 **방 화면**. Hello 교환(`OpponentReady`)이 끝나면 방장의 [게임 시작] 이 활성화. 방장 `CJ_Start` 송신 ∧ 참가자 수신 → 양쪽 VowSelect. 방장이 설정을 바꾸면 `CJ_Settings` | Boot 방 패널 (코드·플레이어·설정) |
 | VowSelect | 후보 제시. **내 뜻 확정(`CJ_Vows` 송신) ∧ 상대 뜻 수신** → MapEdit | Boot 뜻 선택 패널 |
 | MapEdit | MapEditor 애디티브 로드, 그리기 타이머 시작(로컬). 검증 플레이는 이 상태 안에서 진행(씬 전환 없음). 내 [완료] → 에디터 잠금 + 맵 전송 → WaitingSubmit. **타이머 만료(미제출)** → `CJ_SubmitFailed` 송신 → Result(패배) | MapEditor + 방 나가기 띠 + 상대 뜻 패널 |
 | WaitingSubmit | **내 제출 ∧ 상대 맵 수신** → ExchangePlay (각자 독립 판정, 별도 동기화 메시지 없음). 상대 `CJ_SubmitFailed` 수신 → Result(승리) | MapEditor 위 대기 오버레이 |
@@ -75,7 +75,7 @@ Lobby → WaitingOpponent → VowSelect → MapEdit → WaitingSubmit → Exchan
 | WaitingResult | **내 결과 전송 ∧ 상대 결과 수신** → Result | Play 위 대기 오버레이 |
 | Result | Play 언로드, `Ranking.Judge` 판정 표시. [다음 라운드] → WaitingNextRound. 제출 실패 결과도 이 상태 | Boot 결과 패널 |
 | WaitingNextRound | **내 `CJ_NextRound` 송신 ∧ 상대 수신** → Round+1, 라운드 상태 초기화 후 VowSelect (세션·상대·방 설정 유지) | Boot 결과 패널 ([다음 라운드] 비활성 "상대 대기 중...") |
-| Aborted | `MatchAborted`(끊김) 또는 [방 나가기]. 콘텐츠 씬 언로드. 끊김이면 **매치 무효 화면**: 호스트는 [같은 방에서 새 상대 기다리기] → WaitingOpponent(Round 1), 그 외 [방 나가기] → Lobby | Boot 결과 패널 |
+| Aborted | `MatchAborted`(끊김) 또는 [방 나가기]. 콘텐츠 씬 언로드. 끊김이면 **매치 무효 화면**: 호스트는 [같은 방에서 새 상대 기다리기] → RoomLobby(Round 1), 그 외 [방 나가기] → Lobby | Boot 결과 패널 |
 
 - 양쪽 조건이 필요한 전환(VowSelect·WaitingSubmit·WaitingResult·WaitingNextRound)은 **각 클라이언트가 독립적으로 "내 완료 ∧ 상대 메시지 수신"을 판정**한다 — 별도 동기화 메시지 없음
 - 검증은 비동기: 한쪽이 그리는 중에 다른 쪽이 검증·제출 가능
@@ -89,6 +89,8 @@ Lobby → WaitingOpponent → VowSelect → MapEdit → WaitingSubmit → Exchan
 |---|---|---|---|
 | `CJ_Hello` | `nickname`(string, ≤16자), `isHost`(bool), **호스트만** 방 설정 5종 `AttemptLimit`(int)·`DrawTimeLimit`(int)·`PlayTimeLimit`(int)·`VowPickCount`(int)·`VowCandidateCount`(int), `ack`(bool — 상대 Hello 를 이미 받았음) | 양방향 — 상대 Hello 를 받을 때까지 1초마다 재전송 (8장) | ReliableSequenced |
 | `CJ_Vows` | `count`(int), `vowId`(int) × count | 양방향 — 각자 뜻 확정 시 | ReliableSequenced |
+| `CJ_Settings` | 방 설정 5종 (int × 5, Hello 와 같은 순서) — 방 화면에서 방장이 바꿀 때마다 | 호스트 → 참가자 | ReliableSequenced |
+| `CJ_Start` | 방 설정 5종 (최종 스냅샷) — [게임 시작] | 호스트 → 참가자 | ReliableSequenced |
 | `CJ_MapMeta` | `parTime`(float), `totalBytes`(int), `chunkCount`(int) — 맵 전송 시작 (패타임은 여기에 실려 별도 메시지 없음) | 각자 → 상대 | ReliableSequenced |
 | `CJ_MapChunk` | `index`(int), `count`(int), `length`(int), `bytes`(≤4KB) — `MapSerializer.Serialize(map)` 결과(양자화 바이너리+GZip)를 `MapChunker.Split`으로 4KB 분할 | 각자 → 상대 | **ReliableFragmentedSequenced** |
 | `CJ_PlayResult` | `cleared`(bool), `clearTime`(float), `attemptsUsed`(int), `gaveUp`(bool) — `PlayerRecord` (`206_ranking.md`) | 각자 → 상대 | ReliableSequenced |
@@ -170,7 +172,7 @@ class NetService : MonoBehaviour {                      // 구현: Scripts/Netwo
 - 이름 붙은 메시지는 비조각 전달에서 1264바이트 상한이 있으므로 맵 청크는 반드시 `ReliableFragmentedSequenced` (패키지 소스 확인)
 - 양쪽 제출 완료 판정은 각 클라이언트가 독립적으로 "내 제출 ∧ 상대 맵 수신" 을 계산한다 — 별도 동기화 메시지 없음. 결과 화면도 "내 결과 전송 ∧ 상대 결과 수신" 으로 각자 판단
 - 런타임 생성 UI 는 소유 오브젝트의 씬으로 옮겨(`RuntimeUI.Canvas(owner)`) 애디티브 씬 언로드 시 함께 정리된다
-- 미구현: 방 설정 UI(기본값 고정, 호스트 값이 Hello 로 전달), 재접속·호스트 이관. 뜻 선택(VowSelect)·그리기 시간 만료(`CJ_SubmitFailed`)·라운드 반복(`CJ_NextRound`)은 구현됨 (2026-09-06)
+- 미구현: 재접속·호스트 이관. 뜻 선택(VowSelect)·그리기 시간 만료(`CJ_SubmitFailed`)·라운드 반복(`CJ_NextRound`)은 구현됨 (2026-09-06)
 
 ## 9. 테스트 체크리스트
 

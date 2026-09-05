@@ -43,6 +43,8 @@ public class NetService : MonoBehaviour
     const string MsgNextRound = "CJ_NextRound";
     const string MsgSubmitFailed = "CJ_SubmitFailed";
     const string MsgVows = "CJ_Vows";
+    const string MsgSettings = "CJ_Settings";   // 호스트 → 참가자: 방 설정 변경 (방 화면에서 실시간)
+    const string MsgStart = "CJ_Start";         // 호스트 → 참가자: 게임 시작 (최종 설정 스냅샷 포함)
     const float LeaveTimeoutSeconds = 4f;
     const int MaxPlayers = 2;
     const float NetcodeStartTimeout = 20f;
@@ -77,6 +79,10 @@ public class NetService : MonoBehaviour
     public event Action<System.Collections.Generic.List<VowId>> VowsReceived;
     /// <summary>사유 문구. 한 매치에 1회만 발생</summary>
     public event Action<string> MatchAborted;
+    /// <summary>호스트가 방 설정을 바꿨다 (참가자 측에서 발생)</summary>
+    public event Action<RoomSettings> SettingsReceived;
+    /// <summary>호스트가 [게임 시작]을 눌렀다 (참가자 측에서 발생) — 최종 방 설정 포함</summary>
+    public event Action<RoomSettings> StartReceived;
 
     ISession _session;
     ulong _peerClientId = ulong.MaxValue;
@@ -289,6 +295,8 @@ public class NetService : MonoBehaviour
         cmm.RegisterNamedMessageHandler(MsgNextRound, OnNextRound);
         cmm.RegisterNamedMessageHandler(MsgSubmitFailed, OnSubmitFailed);
         cmm.RegisterNamedMessageHandler(MsgVows, OnVows);
+        cmm.RegisterNamedMessageHandler(MsgSettings, OnSettings);
+        cmm.RegisterNamedMessageHandler(MsgStart, OnStart);
 
         UnhookNetcode();
         _onConnected = OnClientConnected;
@@ -455,6 +463,46 @@ public class NetService : MonoBehaviour
         }
     }
 
+    /// <summary>방 설정 변경 통지 (호스트 전용, 방 화면). 상대가 아직 없으면 무시 — Hello 가 현재 값을 실어 보낸다.</summary>
+    public void SendSettings(RoomSettings s)
+    {
+        if (s == null || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+        Settings = s;
+        if (!CanSend()) return;
+        var w = new FastBufferWriter(32, Allocator.Temp, 128);
+        using (w) { WriteSettings(w, s); Send(MsgSettings, w, NetworkDelivery.ReliableSequenced); }
+    }
+
+    /// <summary>게임 시작 (호스트 전용). 최종 설정 스냅샷을 함께 보낸다.</summary>
+    public void SendStart(RoomSettings s)
+    {
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+        if (s != null) Settings = s;
+        if (!CanSend()) { Debug.LogWarning("[NetService] SendStart: 상대와 연결되지 않음"); return; }
+        var w = new FastBufferWriter(32, Allocator.Temp, 128);
+        using (w) { WriteSettings(w, Settings); Send(MsgStart, w, NetworkDelivery.ReliableSequenced); }
+    }
+
+    static void WriteSettings(FastBufferWriter w, RoomSettings s)
+    {
+        w.WriteValueSafe(s.AttemptLimit);
+        w.WriteValueSafe(s.DrawTimeLimit);
+        w.WriteValueSafe(s.PlayTimeLimit);
+        w.WriteValueSafe(s.VowPickCount);
+        w.WriteValueSafe(s.VowCandidateCount);
+    }
+
+    static RoomSettings ReadSettings(FastBufferReader reader)
+    {
+        var s = new RoomSettings();
+        reader.ReadValueSafe(out s.AttemptLimit);
+        reader.ReadValueSafe(out s.DrawTimeLimit);
+        reader.ReadValueSafe(out s.PlayTimeLimit);
+        reader.ReadValueSafe(out s.VowPickCount);
+        reader.ReadValueSafe(out s.VowCandidateCount);
+        return s;
+    }
+
     public void SendNextRound()
     {
         if (!CanSend()) { Debug.LogWarning("[NetService] SendNextRound: 상대와 연결되지 않음"); return; }
@@ -570,6 +618,23 @@ public class NetService : MonoBehaviour
         // 상대가 내 Hello 를 아직 못 받았으면 (또는 처음이면) 한 번 답장 — 양쪽이 서로 받으면 교신이 멎는다
         if (!acked) SendHello();
         if (first) OpponentReady?.Invoke(OpponentNickname, Settings);
+    }
+
+    void OnSettings(ulong sender, FastBufferReader reader)
+    {
+        var s = ReadSettings(reader);
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer) return;   // 설정은 호스트만 바꾼다
+        Settings = s;
+        SettingsReceived?.Invoke(s);
+    }
+
+    void OnStart(ulong sender, FastBufferReader reader)
+    {
+        var s = ReadSettings(reader);
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer) return;
+        Settings = s;
+        SetStatus("호스트가 게임을 시작했습니다");
+        StartReceived?.Invoke(s);
     }
 
     void OnMapMeta(ulong sender, FastBufferReader reader)
