@@ -20,7 +20,8 @@ public class PlayResult
 /// 플레이 1회를 담당하는 씬 무관 세션 (Docs/202 3·5장). 검증 모드(MapEditor 씬 안)와 교환 플레이 모드(Play 씬) 공용.
 ///   맵 로딩(콜라이더 포함) → 플레이어 스폰 → 타이머 → R 리스폰(시도 +1) → 경계 밖 낙하 자동 리스폰 → 골 도달 시 Completed.
 ///   ESC 또는 [에디터로 돌아가기] → Aborted (갇힘 탈출·맵 수정 목적).
-/// 뜻(제약)과 시간 제한은 아직 미적용 — Play 씬 정리 시 PlayerController 입력 필터와 함께 붙인다.
+/// 뜻은 Begin 에서 받아 스폰 직후 1회 적용 (검증 = 상대 뜻, 교환 = 내 뜻). 시간 제한(TimeLimit)은 검증·교환 공용,
+/// 시도 제한(AttemptLimit)은 교환 플레이만 (Docs/100 6장·7.1).
 /// </summary>
 public class PlaySession : MonoBehaviour
 {
@@ -216,6 +217,6 @@ public class PlaySession : MonoBehaviour
         string esc = AbortMeansGiveUp ? "ESC 기권" : "ESC 에디터로";
         string vow = Vows.Count > 0 ? "   |   " + VowCatalog.HudLine(Vows, Player, this) : "";
         _hudText.text = $"{Title}   {time}   {tries}{vow}   |   이동 A/D·←/→   점프 W·↑   S·↓ 빠른 낙하   R 리스폰   {esc}" +
-                        (IsFinished ? (AbortMeansGiveUp ? "   |   종료 — 상대 결과 대기" : "   |   클리어 — 잠시 후 에디터로 돌아갑니다") : "");
+                        (IsFinished ? (AbortMeansGiveUp ? "   |   종료 — 상대 결과 대기" : (Cleared ? "   |   클리어 — 잠시 후 에디터로 돌아갑니다" : "   |   검증 실패 — 잠시 후 에디터로 돌아갑니다")) : "");
     }
 }

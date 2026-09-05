@@ -198,7 +198,7 @@ public static class MapEditorHudBuilder
 
         var badge = Img("RoundBadge", top, S("timer/badge_round_blank"), Color.white, Image.Type.Sliced, 2.7f);
         badge.rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(MarginX, -90), new Vector2(110, 58));
-        var roundText = Txt("RoundText", badge.transform, "1 / 3", 30, FontStyle.Bold, t.TextPrimary, TextAnchor.MiddleCenter);
+        var roundText = Txt("RoundText", badge.transform, "1", 30, FontStyle.Bold, t.TextPrimary, TextAnchor.MiddleCenter);
         roundText.rectTransform.Stretch();
         Txt("RoundKo", top, "라운드", 18, FontStyle.Normal, t.TextMuted, TextAnchor.MiddleLeft)
             .rectTransform.Place(new Vector2(0, 1), new Vector2(0, 1), new Vector2(MarginX + 122, -92), new Vector2(120, 24));

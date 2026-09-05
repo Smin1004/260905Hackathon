@@ -33,8 +33,8 @@ public class MapEditorHud : MonoBehaviour
     [SerializeField] Text roundText;
     [SerializeField] Text subtitleText;
     [SerializeField] Text titleText;
-    [Tooltip("표시용 총 라운드 수. 0 이면 라운드 번호만 표시. ⚠ 라운드 수 규칙은 기획 미확정 — GameFlow 에 개념이 생기면 연결")]
-    [SerializeField] int totalRounds = 3;
+    [Tooltip("표시용 총 라운드 수. 0 이면 라운드 번호만 표시 — 라운드 상한이 없으므로(Docs/100 3장) 기본 0")]
+    [SerializeField] int totalRounds = 0;
 
     [Header("타이머")]
     [SerializeField] Image ringFill;
