@@ -271,16 +271,17 @@ public class PlayHud : MonoBehaviour
         // ---- 우상단: 기권 / 에디터로 돌아가기 (타이머 왼쪽)
         var abortBg = Img("AbortButton", _root, _btnDark, Color.white);
         abortBg.raycastTarget = true;
+        abortBg.sprite = null; abortBg.color = Color.clear;   // (QA) 감싸는 박스 없이 텍스트만 — 클릭 영역만 유지
         Place(abortBg.rectTransform, new Vector2(1, 1), new Vector2(1, 0.5f), new Vector2(-SideMargin - TimerW - 14, -79), new Vector2(230, 48));
         _abortBtn = abortBg.gameObject.AddComponent<Button>();
-        _abortBtn.targetGraphic = abortBg;
+        _abortBtn.onClick.AddListener(() => { Sound.Click(); if (_session != null) _session.Abort(); });
+        _abortLabel = Txt("Label", abortBg.transform, _session.AbortLabel, 20, FontStyle.Bold, Theme.Warning, TextAnchor.MiddleRight);
+        Stretch(_abortLabel.rectTransform);
+        _abortBtn.targetGraphic = _abortLabel;   // 호버·프레스 시 글자 색만 살짝 변함
         var colors = _abortBtn.colors;
-        colors.normalColor = Color.white; colors.highlightedColor = new Color(0.92f, 0.92f, 0.92f); colors.pressedColor = new Color(0.8f, 0.8f, 0.8f);
+        colors.normalColor = Color.white; colors.highlightedColor = new Color(1f, 1f, 1f, 0.8f); colors.pressedColor = new Color(1f, 1f, 1f, 0.6f);
         colors.selectedColor = Color.white; colors.fadeDuration = 0.08f;
         _abortBtn.colors = colors;
-        _abortBtn.onClick.AddListener(() => { Sound.Click(); if (_session != null) _session.Abort(); });
-        _abortLabel = Txt("Label", abortBg.transform, _session.AbortLabel, 18, FontStyle.Bold, Theme.Warning, TextAnchor.MiddleCenter);
-        Stretch(_abortLabel.rectTransform);
 
         // ---- 하단: 조작 안내 (작게)
         var hintBg = Img("HintPanel", _root, _panelDark, new Color(1f, 1f, 1f, 0.75f));

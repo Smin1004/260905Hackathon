@@ -258,7 +258,7 @@ public static class MapEditorHudBuilder
         toolPanel.rectTransform.Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-MarginX, -TopBarH), new Vector2(ToolW, toolPanelH));
 
         // ---- (QA) 검증 → 제출: 빨간 원형 버튼 2개, 번호로 순서 표시. 제출은 검증 성공 후에만 활성
-        var complete = Circle(hc, "Btn_Complete", "② 제출", 26, 140, t);
+        var complete = Circle(hc, "Btn_Complete", "② 제출", 26, 140, t, t.Accent);   // (QA) 활성 초록 / 비활성 회색
         complete.Background.rectTransform.Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-MarginX - (ToolW - 140) * 0.5f, 30), new Vector2(140, 140));
 
         // ---- 하단: 굵기·색상
@@ -313,7 +313,7 @@ public static class MapEditorHudBuilder
         statsText.horizontalOverflow = HorizontalWrapMode.Wrap; statsText.verticalOverflow = VerticalWrapMode.Truncate;
 
         // ---- 하단: 검증 (빨간 원형, 제출 왼쪽)
-        var verify = Circle(hc, "Btn_Verify", "① 검증", 26, 140, t);
+        var verify = Circle(hc, "Btn_Verify", "① 검증", 26, 140, t, t.Warning);
         verify.Background.rectTransform.Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-PaperRight - 24, 30), new Vector2(140, 140));
 
         // ---------- 참조 연결
@@ -483,10 +483,10 @@ public static class MapEditorHudBuilder
     }
 
     /// <summary>(QA) 빨간 원형 버튼 — 검증·제출. 기본 Knob 스프라이트를 상태별 색으로 칠한다 (활성 코랄, 비활성 회색).</summary>
-    static HudToolButton Circle(Transform parent, string name, string label, int fontSize, float diameter, MapEditorTheme t)
+    static HudToolButton Circle(Transform parent, string name, string label, int fontSize, float diameter, MapEditorTheme t, Color activeColor)
     {
         var knob = Builtin("Knob.psd");
-        var bg = Img(name, parent, knob, t.Warning, Image.Type.Simple);
+        var bg = Img(name, parent, knob, activeColor, Image.Type.Simple);
         bg.preserveAspect = true;
         bg.rectTransform.sizeDelta = new Vector2(diameter, diameter);
         var btn = bg.gameObject.AddComponent<Button>();
@@ -496,8 +496,8 @@ public static class MapEditorHudBuilder
         tb.Button = btn; tb.Background = bg;
         tb.Normal = tb.Active = tb.Disabled = knob;
         tb.TintBackground = true;
-        tb.BackgroundNormal = t.Warning;
-        tb.BackgroundActive = t.Warning;
+        tb.BackgroundNormal = activeColor;
+        tb.BackgroundActive = activeColor;
         tb.BackgroundDisabled = new Color(0.30f, 0.32f, 0.38f);
         tb.ContentNormal = tb.ContentActive = Color.white;
         tb.ContentDisabled = t.IconDisabled;
