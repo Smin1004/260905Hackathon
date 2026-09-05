@@ -43,85 +43,98 @@
 | 역할 | 방장 = NGO Host, 참가자 = NGO Client. 메시지는 항상 Host↔Client 1:1 |
 | 동기화 | 방 설정은 **세션 프로퍼티**로 저장 — 참가자가 세션에 들어오면 즉시 읽을 수 있음 |
 
-### 세션 프로퍼티 (방 설정 — `100_game_design.md` 7.1과 1:1)
+### 방 설정 6종 (`100_game_design.md` 7.1과 1:1 — `RoomSettings`)
 
 ```
-ParTimeMode   : "0" | "1"            (기본 "0")
-AttemptLimit  : "0" | "3" | "5"      (0=무한)
-DrawTimeLimit : "120" | "300" | "600" (초, 기본 "300")
-PlayTimeLimit : "120" | "180" | "300" (초, 기본 "180" — 검증·교환 공용)
+ParTimeMode       : bool  (기본 false)
+AttemptLimit      : int   0 | 3 | 5        (0=무한)
+DrawTimeLimit     : int   120 | 300 | 600  (초, 기본 300)
+PlayTimeLimit     : int   120 | 180 | 300  (초, 기본 180 — 검증·교환 공용)
+VowPickCount      : int   (기본 1 — 라운드마다 고르는 뜻 개수)
+VowCandidateCount : int   (기본 5 — 뜻 후보 수, 0=전체)
 ```
 
-- 세션 프로퍼티 값은 문자열이므로 `RoomSettings` ↔ 문자열 변환은 `NetService` 내부에서 처리. 가시성은 `Member`(세션 참가자만 읽음)
-- 참가자는 `session.Properties`를 읽어 `MatchData.Settings`에 채운다 (`201_common.md` 3장)
+- **구현은 세션 프로퍼티 대신 `CJ_Hello` 메시지**로 호스트가 참가자에게 전달한다 (5장, 8장). 참가자는 Hello 를 받으면 `MatchData.Settings`에 채운다 (`201_common.md` 3장). 세션 프로퍼티 방식은 설계 참고로만 남긴다
 
-## 4. 매치 흐름 FSM (Boot 소유, 통합 담당)
+## 4. 매치 흐름 FSM (Boot 소유, 통합 담당 — `GameFlow.MatchState`)
 
 ```
-WaitingRoom → VowSelect → MapEdit → Verify → WaitingSubmit → ExchangePlay → Result
+Lobby → WaitingOpponent → VowSelect → MapEdit → WaitingSubmit → ExchangePlay → WaitingResult → Result → WaitingNextRound ─┐
+                              ↑                                                                                          │
+                              └──────────────────────── (Round+1, 같은 방) ───────────────────────────────────────────────┘
+어느 상태에서든 → Aborted (연결 끊김 / 방 나가기)
 ```
 
-| 상태 | 전환 조건 | 씬 |
+| 상태 | 진입·전환 조건 | 화면 |
 |---|---|---|
-| WaitingRoom | 양쪽 접속 완료 (`session.PlayerCount == 2` 또는 NGO `OnClientConnectedCallback`) | Lobby |
-| VowSelect | 양쪽 뜻 확정 동기화 | Lobby |
-| MapEdit | 진입 즉시 (그리기 타이머 로컬 카운트) | MapEditor |
-| Verify | 자기 검증 결과에 따라 개별 진행 (비동기) | Play(검증 모드) ↔ MapEditor |
-| WaitingSubmit | 양쪽 제출(검증 클리어) 완료 | MapEditor 대기 오버레이 |
-| ExchangePlay | 양쪽 제출 확인 → 동시 시작 | Play(교환 모드) |
-| Result | 양쪽 결과 수신 완료 | Result |
+| Lobby | 초기 상태·복귀 상태. [방 만들기] / 코드 [참가] | Boot 로비 패널 |
+| WaitingOpponent | 방 생성·참가 직후. **Hello 교환 완료**(`OpponentReady`) → VowSelect | Boot 로비 패널 (방 코드 표시) |
+| VowSelect | 후보 제시. **내 뜻 확정(`CJ_Vows` 송신) ∧ 상대 뜻 수신** → MapEdit | Boot 뜻 선택 패널 |
+| MapEdit | MapEditor 애디티브 로드, 그리기 타이머 시작(로컬). 검증 플레이는 이 상태 안에서 진행(씬 전환 없음). 내 [완료] → 에디터 잠금 + 맵 전송 → WaitingSubmit. **타이머 만료(미제출)** → `CJ_SubmitFailed` 송신 → Result(패배) | MapEditor + 방 나가기 띠 + 상대 뜻 패널 |
+| WaitingSubmit | **내 제출 ∧ 상대 맵 수신** → ExchangePlay (각자 독립 판정, 별도 동기화 메시지 없음). 상대 `CJ_SubmitFailed` 수신 → Result(승리) | MapEditor 위 대기 오버레이 |
+| ExchangePlay | MapEditor 언로드 → Play 로드. 내 플레이 종료(클리어·기권·시간 만료·시도 소진) → `CJ_PlayResult` 송신 → WaitingResult | Play |
+| WaitingResult | **내 결과 전송 ∧ 상대 결과 수신** → Result | Play 위 대기 오버레이 |
+| Result | Play 언로드, `Ranking.Judge` 판정 표시. [다음 라운드] → WaitingNextRound. 제출 실패 결과도 이 상태 | Boot 결과 패널 |
+| WaitingNextRound | **내 `CJ_NextRound` 송신 ∧ 상대 수신** → Round+1, 라운드 상태 초기화 후 VowSelect (세션·상대·방 설정 유지) | Boot 결과 패널 ([다음 라운드] 비활성 "상대 대기 중...") |
+| Aborted | `MatchAborted`(끊김) 또는 [방 나가기]. 콘텐츠 씬 언로드. 끊김이면 **매치 무효 화면**: 호스트는 [같은 방에서 새 상대 기다리기] → WaitingOpponent(Round 1), 그 외 [방 나가기] → Lobby | Boot 결과 패널 |
 
-- 상태는 **양쪽 조건이 충족될 때만 전환** — 각자의 진행 완료를 메시지로 보고받아 통과
-- Verify는 비동기: 한쪽이 그리는 중에 다른 쪽이 검증 가능
-- 타이머(그리기·플레이)는 로컬 카운트, 만료 처리 룰은 `100_game_design.md` 7.3·8장
+- 양쪽 조건이 필요한 전환(VowSelect·WaitingSubmit·WaitingResult·WaitingNextRound)은 **각 클라이언트가 독립적으로 "내 완료 ∧ 상대 메시지 수신"을 판정**한다 — 별도 동기화 메시지 없음
+- 검증은 비동기: 한쪽이 그리는 중에 다른 쪽이 검증·제출 가능
+- 타이머(그리기·플레이)는 로컬 카운트, 만료 처리 룰은 `100_game_design.md` 6장·7.3·8장
 
 ## 5. 메시지 정의 (NGO 이름 붙은 메시지)
 
 `NetworkManager.CustomMessagingManager.SendNamedMessage(name, clientId, writer, delivery)` 기반. 이름은 아래 표의 메시지명 문자열을 그대로 쓴다.
 
-| 메시지명 | 페이로드 | 방향 | 전달 방식 |
+| 메시지명 | 페이로드 (쓰는 순서) | 방향 | 전달 방식 |
 |---|---|---|---|
-| `VowSelected` | `vowId`(int), `nickname`(string) | 양방향 | ReliableSequenced |
-| `MapChunk` | `chunkIndex`(int), `chunkCount`(int), `bytes`(byte[] ≤ 4KB) — `MapSerializer.Serialize(map)` 결과(양자화 바이너리+GZip)를 `MapChunker.Split`으로 4KB 분할 | 각자 → 상대 | ReliableSequenced |
-| `VerifyComplete` | `parTime`(float) | 각자 → 상대 | ReliableSequenced |
-| `PlayResult` | `PlayerRecord` (`206_ranking.md`) — 필드 4개 직접 직렬화 | 각자 → 상대 | ReliableSequenced |
-| `SubmitFailed` | 없음 — 검증 단계 총 상한 초과 통지 → 수신측 승리로 Result 전환 (`100_game_design.md` 6장) | 각자 → 상대 | ReliableSequenced |
-| (콜백) 접속 끊김 | NGO `OnClientDisconnectCallback` / 세션 `RemovedFromSession` → `MatchAbort` 이벤트로 변환 | 시스템 | — |
+| `CJ_Hello` | `nickname`(string, ≤16자), `isHost`(bool), **호스트만** 방 설정 6종 `ParTimeMode`(bool)·`AttemptLimit`(int)·`DrawTimeLimit`(int)·`PlayTimeLimit`(int)·`VowPickCount`(int)·`VowCandidateCount`(int), `ack`(bool — 상대 Hello 를 이미 받았음) | 양방향 — 상대 Hello 를 받을 때까지 1초마다 재전송 (8장) | ReliableSequenced |
+| `CJ_Vows` | `count`(int), `vowId`(int) × count | 양방향 — 각자 뜻 확정 시 | ReliableSequenced |
+| `CJ_MapMeta` | `parTime`(float), `totalBytes`(int), `chunkCount`(int) — 맵 전송 시작 (패타임은 여기에 실려 별도 메시지 없음) | 각자 → 상대 | ReliableSequenced |
+| `CJ_MapChunk` | `index`(int), `count`(int), `length`(int), `bytes`(≤4KB) — `MapSerializer.Serialize(map)` 결과(양자화 바이너리+GZip)를 `MapChunker.Split`으로 4KB 분할 | 각자 → 상대 | **ReliableFragmentedSequenced** |
+| `CJ_PlayResult` | `cleared`(bool), `clearTime`(float), `attemptsUsed`(int), `gaveUp`(bool) — `PlayerRecord` (`206_ranking.md`) | 각자 → 상대 | ReliableSequenced |
+| `CJ_NextRound` | 더미 int 1 — [다음 라운드] 준비 완료 | 각자 → 상대 | ReliableSequenced |
+| `CJ_SubmitFailed` | 더미 int 1 — 그리기 시간 만료 미제출 통지 → 수신측 승리(양쪽이면 무승부)로 Result 전환 (`100_game_design.md` 6장) | 각자 → 상대 | ReliableSequenced |
+| (콜백) 접속 끊김 | NGO `OnClientDisconnectCallback`·`OnTransportFailure`·`OnClientStopped`/`OnServerStopped` / 세션 `PlayerLeaving`·`RemovedFromSession`·`Deleted` → `MatchAborted(사유)` 이벤트 1회 | 시스템 | — |
 
 - 데이터 전송은 **확정 시점에만** (그리기 중 전송 없음 — 라이브 관전은 스코프 아웃)
-- **맵 청크 분할이 필수**: NGO/Unity Transport의 기본 최대 페이로드(수 KB)보다 `MapData`가 크다. 송신측은 `MapSerializer.Serialize` → `MapChunker.Split`(4KB)로 나눠 순서대로 보내고, 수신측은 `MapChunkAssembler.Add`로 모아 완성 시 `MapSerializer.Deserialize` → `MatchData.OpponentMap`. `MapChunk`는 ReliableSequenced라 순서·누락 걱정 없음. 송신 지점은 `MapEditorController.Completed(map, payload)` 이벤트
+- **맵 청크 분할이 필수**: NGO/Unity Transport의 기본 최대 페이로드(수 KB)보다 `MapData`가 크다. 송신측은 `MapSerializer.Serialize` → `MapChunker.Split`(4KB)로 나눠 `CJ_MapMeta` 뒤에 순서대로 보내고, 수신측은 `MapChunkAssembler.Add`로 모아 완성 시 `MapSerializer.Deserialize` → `MatchData.OpponentMap`. 순서 보장 전달이라 순서·누락 걱정 없음. 송신 지점은 `MapEditorController.Completed(map, payload)` 이벤트를 `GameFlow`가 받아 `NetService.SendMap(payload, parTime)` 호출
 - `MapData` 자체 크기는 양자화·다운샘플로 ≤100KB 유지 (`203_map_editor.md` 5장) → 청크 25개 이내
 - 수신측은 `MatchData`에 반영 후 Boot FSM에 C# 이벤트로 보고
 
 ## 6. `NetService` 래퍼 싱글턴 (네트워크 담당 납품)
 
 ```csharp
-class NetService : MonoBehaviour {
-    // 초기화 — Boot에서 1회 (UnityServices.InitializeAsync → 익명 로그인)
+class NetService : MonoBehaviour {                      // 구현: Scripts/Network/NetService.cs
+    // 초기화 — Boot에서 1회 (UnityServices.InitializeAsync → 익명 로그인, 인스턴스별 프로필)
     Task Init();
 
-    // Lobby 씬용
+    // 방
     Task<string> CreateRoom(RoomSettings settings, string nickname);  // 반환: 참가 코드
-    Task JoinRoom(string roomCode, string nickname);
-    RoomSettings CurrentSettings { get; }   // 세션 프로퍼티에서 읽은 값
-    bool IsHost { get; }
+    Task JoinRoom(string roomCode, string nickname);                   // 실패 시 예외 (코드 틀림 등)
+    Task Leave();                       // 타임아웃 포함 세션 종료
+    bool PrepareForNewOpponent();       // 호스트 전용 — 같은 방에서 새 상대 대기
+    void ResetForNextRound();           // 라운드 진행 플래그만 초기화
+    RoomSettings Settings { get; }      // 호스트 값 (Hello 로 수신)
+    bool IsHost, InSession, IsNetcodeUp, IsOpponentReady;  string RoomCode, OpponentNickname, Status;
 
-    // 매치용
-    void SendVow(VowId id);          // nickname 동봉
-    void SendMap(MapData map);       // 내부에서 청크 분할
-    void SendVerify(float parTime);
+    // 매치 메시지 (5장)
+    void SendVows(IList<VowId> vows);
+    void SendMap(byte[] payload, float parTime);   // 내부에서 MapMeta + 청크 분할
     void SendResult(PlayerRecord record);
+    void SendNextRound();
     void SendSubmitFailed();
 
-    // 콜백 이벤트 — 상대 입력 수신 시 상위(Boot FSM)에 전파
-    event Action OnOpponentJoined;
-    event Action<VowId, string> OnVowReceived;
-    event Action<MapData> OnMapReceived;          // 청크 조립 완료 시 1회
-    event Action<float> OnVerifyReceived;
-    event Action<PlayerRecord> OnResultReceived;
-    event Action OnSubmitFailedReceived;
-    event Action<string> OnMatchAbort;            // 사유 문구
-    event Action<string> OnError;                 // 코드 틀림 등 로비 오류
+    // 콜백 이벤트 — Boot FSM(GameFlow)이 구독
+    event Action<string> StatusChanged;
+    event Action<string, RoomSettings> OpponentReady;   // Hello 교환 완료 (상대 닉네임, 방 설정)
+    event Action<List<VowId>> VowsReceived;
+    event Action<int, int> MapChunkProgress;
+    event Action<MapData, float> MapReceived;           // 청크 조립 완료 시 1회 (맵, 패타임)
+    event Action<PlayerRecord> ResultReceived;
+    event Action NextRoundReceived;
+    event Action SubmitFailedReceived;
+    event Action<string> MatchAborted;                  // 사유 문구, 매치당 1회
 }
 ```
 
@@ -135,11 +148,11 @@ class NetService : MonoBehaviour {
 |---|---|
 | 방 코드 틀림/존재 없음 | `JoinSessionByCodeAsync` 예외 → `OnError` → 로비에 오류 문구 (재입력 유도) |
 | 참가자 3명 이상 시도 | `MaxPlayers = 2`로 자동 거부 |
-| 플레이 중 끊김 (참가자) | Host가 `OnClientDisconnectCallback` 수신 → `OnMatchAbort` → 즉시 결과 화면, 무효 처리 (`100_game_design.md` 8장) |
-| 플레이 중 끊김 (방장) | 세션 종료 → 참가자에게 `RemovedFromSession` → 동일하게 `OnMatchAbort`. MVP: 호스트 이관·재접속 미지원 |
-| 그리기 시간 만료 | 로컬 판단. 골 없으면 골 배치만 허용 → 배치 즉시 검증 진입 (`100_game_design.md` 5장) |
-| 검증 단계 총 상한 초과 | `SubmitFailed` 전파 → 상대 승리로 매치 종료 (`100_game_design.md` 6장) |
-| 플레이 시간 만료 | 로컬 판단 → `PlayResult`(GaveUp=true) 전송. 양쪽 모두 반드시 결과를 보내므로 Result 전환 보장 |
+| 플레이 중 끊김 (참가자) | Host가 `OnClientDisconnectCallback` 수신 → `MatchAborted` → 매치 무효 화면. 호스트는 [같은 방에서 새 상대 기다리기]로 같은 방 코드 유지 가능 (`100_game_design.md` 8장) |
+| 플레이 중 끊김 (방장) | 세션 종료 → 참가자에게 `RemovedFromSession` → 동일하게 `MatchAborted` → 매치 무효 화면, [방 나가기]만. MVP: 호스트 이관·재접속 미지원 |
+| Hello 전 참가 실패·이탈 | 호스트는 방을 유지하고 다시 기다린다 (Abort 아님) |
+| 그리기 시간 만료 (미제출) | 로컬 판단 → 에디터 잠금 + `CJ_SubmitFailed` 전송 → 양쪽 Result(송신측 패배·수신측 승리, 양쪽 동시면 무승부) (`100_game_design.md` 6장) |
+| 플레이 시간 만료·기권·시도 소진 (교환) | 로컬 판단 → `CJ_PlayResult`(GaveUp=true) 전송. 양쪽 모두 반드시 결과를 보내므로 Result 전환 보장. 검증 플레이의 시간 만료는 로컬에서 에디터 복귀만 (메시지 없음) |
 | 서비스 초기화 실패 (오프라인 등) | `Init()` 예외 → 로비에 "네트워크 연결 실패" 1문장, 재시도 버튼 |
 
 ## 8. 구현 현황 (2026-09-05)
@@ -158,13 +171,13 @@ class NetService : MonoBehaviour {
 - 이름 붙은 메시지는 비조각 전달에서 1264바이트 상한이 있으므로 맵 청크는 반드시 `ReliableFragmentedSequenced` (패키지 소스 확인)
 - 양쪽 제출 완료 판정은 각 클라이언트가 독립적으로 "내 제출 ∧ 상대 맵 수신" 을 계산한다 — 별도 동기화 메시지 없음. 결과 화면도 "내 결과 전송 ∧ 상대 결과 수신" 으로 각자 판단
 - 런타임 생성 UI 는 소유 오브젝트의 씬으로 옮겨(`RuntimeUI.Canvas(owner)`) 애디티브 씬 언로드 시 함께 정리된다
-- 미구현: 뜻 선택 단계(VowSelect — 뜻 시스템 자체가 미구현), 그리기 시간 제한, 방 설정 UI(기본값 고정), 검증 단계 총 상한 `SubmitFailed`, 재접속
+- 미구현: 방 설정 UI(기본값 고정, 호스트 값이 Hello 로 전달), 재접속·호스트 이관. 뜻 선택(VowSelect)·그리기 시간 만료(`CJ_SubmitFailed`)·라운드 반복(`CJ_NextRound`)은 구현됨 (2026-09-06)
 
 ## 9. 테스트 체크리스트
 
 - [x] 팀 대표 커밋 후 다른 팀원 PC에서 추가 설정 없이 `Init()` 성공 (프로젝트 연결 공유 확인) — 빌드 클라이언트에서 확인
 - [x] 방 생성 → 코드 표시 → 코드 참가 → 2인 접속 확인 (에디터 호스트 + 개발 빌드 클라이언트)
-- [ ] 세션 프로퍼티 → 참가자 `RoomSettings` 4종 값 일치
+- [ ] Hello 로 전달된 참가자 `RoomSettings` 6종 값이 호스트와 일치
 - [ ] `MapData` 청크 분할 전송 왕복 무손실 (60스트로크 × 300점 상한 맵으로)
 - [x] 상태 전환 전부 양방향 동기화 되는지 (한쪽만 빠른 경우 처리) — 자동 파일럿 2 프로세스로 Lobby→Result 전 구간 통과
 - [x] 참가자 강제 종료 / 방장 강제 종료 각각 → 상대 화면이 결과(무효)로 전환 — 양방향 확인. 호스트는 같은 방에서 새 상대 수용 확인

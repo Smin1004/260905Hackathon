@@ -14,7 +14,8 @@ public enum EditorTool { Pen, Eraser, Goal }
 /// - 입력(마우스/터치/펜) → 월드 좌표 → 점 수집(최소 거리 필터) → 확정(단순화·양자화) → MapData
 /// - 도구: 펜(굵기·색상), 지우개(구간 잘라내기), 골 배치, 실행취소/다시실행(스냅샷, Ctrl+Z / Ctrl+Y), 전체 지우기
 /// - 검증 플레이: StartVerification() → PlaySession 이 맵을 콜라이더로 로드하고 플레이어를 스폰. 골 도달 = 검증 성공(패타임 기록).
-///   ESC/버튼으로 언제든 에디터 복귀. 맵을 수정하면 검증 무효.
+///   방 설정 PlayTimeLimit 이 검증 1회에도 적용 (Docs/100 6장·7.1 — 검증·교환 공용). 만료 시 미클리어 → 잠시 후 에디터 복귀, 재검증마다 타이머 새로 시작.
+///   시도는 무제한. ESC/버튼으로 언제든 에디터 복귀. 맵을 수정하면 검증 무효.
 /// - Complete(): 검증 성공 필수 → 직렬화 → 역직렬화 왕복 검증 → MatchData 반영 → Completed 이벤트 (네트워크 전송 지점)
 ///
 /// 모든 조작은 public 메서드로도 노출되어 UI·테스트·자동화가 같은 경로를 탄다.
@@ -467,10 +468,13 @@ public class MapEditorController : MonoBehaviour
             Debug.LogWarning("[MapEditor] 검증에 적용할 상대 뜻이 없습니다 — 뜻 교환이 끝나지 않았거나 상대가 뜻을 고르지 않은 상태");
         Debug.Log("[MapEditor] 검증 플레이 시작 — 적용 뜻: " + VowCatalog.NamesOf(vows));
         _session = PlaySession.Begin(Map.Clone(), vows != null && vows.Count > 0 ? "검증 플레이 — 상대 뜻: " + VowCatalog.NamesOf(vows) : "검증 플레이", transform, vows);
+        _session.TimeLimit = Mathf.Max(0, MatchData.Instance.Settings.PlayTimeLimit);   // 검증·교환 공용 플레이 시간 제한 (Docs/100 7.1). 시도 제한은 검증에 없음
         _session.Completed += OnVerificationCompleted;
         _session.Aborted += OnVerificationAborted;
 
-        SetStatus("검증 플레이: 시작점에서 골까지 도달하면 검증 성공. R 리스폰, ESC 에디터 복귀.");
+        SetStatus(_session.TimeLimit > 0f
+            ? $"검증 플레이: {_session.TimeLimit:0}초 안에 시작점에서 골까지 도달하면 검증 성공. R 리스폰, ESC 에디터 복귀."
+            : "검증 플레이: 시작점에서 골까지 도달하면 검증 성공. R 리스폰, ESC 에디터 복귀.");
         VerificationChanged?.Invoke(true);
         Changed?.Invoke();
         return true;
@@ -482,6 +486,7 @@ public class MapEditorController : MonoBehaviour
         if (_session == null) return;
         var s = _session;
         _session = null;
+        bool timedOut = s.IsFinished && !s.Cleared;   // 플레이 시간 만료로 끝난 검증 (End 전에 읽는다)
         s.Completed -= OnVerificationCompleted;
         s.Aborted -= OnVerificationAborted;
         s.End();
@@ -494,6 +499,7 @@ public class MapEditorController : MonoBehaviour
         _pressedLastFrame = true;   // 복귀 클릭이 곧바로 펜 입력으로 새지 않게
 
         if (IsVerified) SetStatus($"검증 성공 — 클리어 {VerifiedParTime:0.00}초 (패타임). [완료]로 확정할 수 있습니다. 맵을 수정하면 재검증이 필요합니다.");
+        else if (timedOut) SetStatus("검증 실패 — 플레이 시간 만료. 맵을 수정한 뒤 다시 검증하세요 (검증 타이머는 새로 시작합니다).");
         else SetStatus("에디터로 돌아왔습니다. 맵을 수정한 뒤 다시 검증하세요.");
         VerificationChanged?.Invoke(false);
         Changed?.Invoke();
@@ -501,7 +507,13 @@ public class MapEditorController : MonoBehaviour
 
     void OnVerificationCompleted(PlayResult r)
     {
-        if (!r.Cleared) return;
+        if (!r.Cleared)
+        {
+            // 플레이 시간 만료 — 검증 실패. 잠시 후 에디터로 돌아가 맵을 수정·재검증한다 (Docs/100 6장). 그리기 타이머는 계속 흐른다
+            Debug.Log($"[MapEditor] 검증 실패 (시간 만료) — {r.ClearTime:0.00}s, 시도 {r.Attempts}");
+            _returnCoroutine = StartCoroutine(ReturnAfter(2.5f));
+            return;
+        }
         IsVerified = true;
         VerifiedParTime = r.ClearTime;
         MatchData.Instance.MyParTime = r.ClearTime;

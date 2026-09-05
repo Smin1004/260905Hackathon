@@ -33,35 +33,36 @@
 
 ## 2. 뜻(제약) 시스템 구현
 
-### 설계 방식
+### 설계 방식 (구현: `Scripts/Common/Vows.cs`)
 
-컨트롤러는 기본 성능을 가지고, **뜻은 컨트롤러 파라미터/입력을 수정하는 모듈**로 적용한다.
+컨트롤러는 기본 성능을 가지고, **뜻은 컨트롤러의 공개 파라미터를 바꾸는 카탈로그 항목**으로 적용한다. 입력 필터 체인은 두지 않는다 — 1장의 값들이 전부 공개 필드라 파라미터 변경만으로 8종이 표현된다.
 
 ```csharp
-// 뜻 정의 — 목록은 100_game_design.md 4.1
-enum VowId { None, NoJump, SpeedCap, NoBackward, JumpLimit3, NoIdle }
+enum VowId { None, SlowMove, LowJump, HeavyGravity, JumpCooldown, JumpLimit, NoAirControl, BigBody, Slippery }  // int 전송 — 뒤에만 추가
 
-class VowModifier {
-    VowId Id;
-    void Apply(PlayerController pc, VowContext ctx);  // 컨트롤러에 제약 주입
-}
+class VowDef { VowId Id; string Name, Description; int Tier; Action<VowContext> Apply; Func<VowContext, string> Status; }
+static class VowCatalog { List<VowDef> All; RandomCandidates(count); Apply(ids, player, session); HudLine(ids, player, session); }
 ```
 
-- `VowContext`: 현재 매치 데이터(진행 방향, 시도 횟수 등) 접근 제공
-- 컨트롤러는 매 프레임 입력을 받기 전에 **활성 뜻의 필터 체인**을 통과시킨다
+- `VowContext`: `PlayerController` + `PlaySession` 접근. `Apply`는 **스폰 직후 1회** 호출되어 파라미터를 바꾸므로 리스폰해도 유지된다
+- `Status`가 있는 뜻(점프 쿨다운·점프 5회)은 HUD 한 줄에 실시간 상태를 덧붙인다 (`204_ui.md` 2.3)
+- 새 뜻 = `VowId` 추가 + `VowCatalog.All`에 항목 1개. 뜻 목록·수치는 `100_game_design.md` 4.1
 
 ### 뜻별 구현 방식
 
-| 뜻 | 구현 |
+| 뜻 | 구현 (바꾸는 파라미터) |
 |---|---|
-| 점프 금지 | 점프 입력 무시 |
-| 이동 속도 제한 | `maxSpeed` 절반으로 오버라이드 |
-| 역이동 금지 | 골 방향 기준 반대 입력 마스크 (골이 우측이면 좌 입력 차단). 방향은 `GoalPos.x` vs `StartPos.x`로 **플레이 시작 시 1회 고정** (⚠ 플레이어 위치 기준 동적 판정으로 바꿀지 확인 필요) |
-| 점프 3회 제한 | 점프 카운터, 소진 시 점프 차단. **리스폰(자동·R키)마다 카운터 초기화** |
-| 대기 금지 | 아이들 1초 → 진행 방향 자동 입력 |
+| 저속 | `MoveSpeed` ×0.5 |
+| 저점프 | `JumpSpeed` ×0.71 (높이 ∝ v² → ×0.5) |
+| 고중력 | `RiseGravity`·`FallGravity` ×1.6 |
+| 점프 쿨다운 | `JumpCooldownAfterLanding` = 1.0s — 착지 후 쿨다운 동안 점프 차단, 남은 시간 HUD 표시 |
+| 점프 5회 | `MaxJumpsPerAttempt` = 5 — 시도당 카운터, **리스폰(자동·R키)마다 초기화**, 남은 횟수 HUD 표시 |
+| 공중 제어 금지 | `AirControl` = false — 점프 순간 수평 속도가 착지까지 고정 |
+| 큰 몸집 | `ApplyBodyScale(1.5)` — 콜라이더·스프라이트 1.5배 |
+| 미끄러운 발 | `GroundAccelTime` 0.5 / `GroundDecelTime` 0.6 / `IdleFriction` 0.05 + 재질 갱신 |
 
-- 적용 시점: 뜻은 **검증 모드(상대 뜻)**와 **교환 플레이 모드(자기 뜻)**에서 다르게 로드됨 — 아래 3장
-- 뜻 내부 상태(점프 카운터, 아이들 타이머 등)는 **리스폰 시 전부 초기화** — `VowModifier`에 `Reset()` 제공, 컨트롤러가 리스폰 시 호출
+- 적용 시점: **검증 모드 = 상대 뜻**(`MatchData.OpponentVows`), **교환 플레이 모드 = 자기 뜻**(`MatchData.MyVows`) — 아래 3장
+- 카운터형 상태(점프 횟수·쿨다운)는 컨트롤러가 리스폰 시 초기화
 - HUD에 현재 뜻 상시 표시 (`204_ui.md`)
 
 ## 3. Play 씬 모드 구성
@@ -94,15 +95,15 @@ Play 씬은 하나이며, 모드 파라미터로 두 가지로 동작:
 | 타이머 | 플레이 시작부터 골 도달까지 누적 (리스폰해도 리셋 안 됨). HUD에는 **남은 시간**(제한 − 경과) 표시 |
 | 시간 동기화 | 시간 측정은 로컬, 기록 확정 시에만 네트워크 전송 (`205_network.md`) |
 
-## 6. 카메라
+## 6. 카메라 (결정: 맵 전체 고정 시야)
 
-- 플레이어 추적 카메라 (기본 follow, 부드러운 보간)
-- 맵 전체가 고정 크기이므로 필요 시 맵 경계 내에서만 이동하도록 클램프
+- **맵 전체(30×15u)를 한 화면에 고정**으로 보여준다 — 추적 카메라 없음. 검증(에디터 안)과 교환 플레이(Play 씬) 모두 `CanvasView.FitCamera`로 맵 사각형에 맞춘다
+- 근거: 캐릭터(0.6×0.9u)가 맵 폭의 1/50이라 전체 시야에서도 1920px 기준 약 38px로 충분히 식별된다. 제작자가 그린 맵을 한눈에 읽는 것이 드로잉 맵 게임의 핵심이고, 에디터 화면과 플레이 화면의 시야가 같아 검증 감각이 그대로 유지된다
 - 후처리(톤 통일)는 선택 사항 — `201_common.md` 아트 방침
 
 ## 7. 테스트 체크리스트
 
-- [ ] 각 뜻별로 실제 강제되는지 (특히 역이동 금지의 방향 판정)
+- [ ] 각 뜻별로 실제 강제되는지 (8종 — `100_game_design.md` 4.1)
 - [ ] 낙하 → 자동 리스폰 → 타이머 유지, 시도 미소모 확인
 - [ ] R키 리스폰 → 시도 +1, 점프 카운터 초기화 확인
 - [ ] 플레이 시간 만료 → 미클리어 처리(교환) / 에디터 복귀(검증) 확인
@@ -121,7 +122,7 @@ Play 씬은 하나이며, 모드 파라미터로 두 가지로 동작:
 | 검증 모드 | MapEditor 씬 안에서 `MapEditorController.StartVerification()`이 PlaySession 을 띄운다 (3장의 "검증 모드"). 골 도달 시 클리어 시간이 패타임으로 `MatchData.MyParTime`에 기록되고 2.5초 후 에디터 복귀. 맵을 수정하면 검증 무효 → 재검증 |
 | 교환 플레이 모드 | 미구현 — Play 씬을 만들고 `PlaySession.Begin(MatchData.OpponentMap, ...)` 으로 같은 세션을 쓰면 된다 |
 
-미구현: 뜻(제약) 필터 체인, 플레이 시간 제한·시도 제한 판정, 추적 카메라(현재는 맵 전체 고정 시야), 스프라이트 애니메이션.
+미구현: 스프라이트 애니메이션. 카메라는 맵 전체 고정 시야로 확정 (6장 — 추적 카메라 없음).
 
 > 주의: MapEditor 씬은 `Application.runInBackground = true`를 켠다. 에디터 창이 포커스를 잃으면 플레이 모드가 멈춰 타이머·물리가 진행되지 않기 때문 (멀티 대기 중에도 필수). Boot 씬이 생기면 그쪽으로 옮긴다.
 

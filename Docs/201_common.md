@@ -48,7 +48,7 @@ class MatchData {
     VowId OpponentVow;      // 상대 뜻
     MapData MyMap;          // 내가 만든 맵 (검증 완료본)
     MapData OpponentMap;    // 상대가 만든 맵
-    RoomSettings Settings;  // 방 설정 4종 (100_game_design.md 7.1)
+    RoomSettings Settings;  // 방 설정 6종 (100_game_design.md 7.1)
     string MyNickname;      // 내 닉네임 (Lobby 입력, 기본값 "플레이어N")
     string OpponentNickname;
     float MyParTime;        // 내 맵의 검증 기록(패타임)
