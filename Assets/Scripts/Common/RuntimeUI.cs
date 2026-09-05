@@ -3,12 +3,13 @@ using UnityEngine.UI;
 
 /// <summary>
 /// 런타임 생성 legacy uGUI 위젯 팩토리 (플레이스홀더). 공용 UI 킷(Docs/201 4장) 확정 전까지 임시 화면에 사용한다.
-/// LegacyRuntime 동적 폰트는 OS 폰트 폴백으로 한글이 표시된다.
+/// 한글 폰트(Resources/Fonts, Docs/102 1.3)를 우선 사용하고, 없으면 LegacyRuntime(OS 폰트 폴백)으로 동작한다.
 /// </summary>
 public static class RuntimeUI
 {
     static Font _font;
-    public static Font Font => _font != null ? _font : (_font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
+    public static Font Font => _font != null ? _font : (_font = Resources.Load<Font>("Fonts/Pretendard-Regular")
+        ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 
     /// <summary>캔버스를 만들고, owner 가 있으면 owner 의 씬으로 옮긴다 (애디티브 씬 언로드 시 함께 정리되게).</summary>
     public static Canvas Canvas(string name, int sortingOrder, GameObject owner = null)
