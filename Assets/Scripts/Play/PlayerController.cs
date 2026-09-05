@@ -298,6 +298,7 @@ public class PlayerController : MonoBehaviour
                 along = Accelerate(along, target, EffectiveGroundAccelTime, dt);
                 v = tangent * along;                                             // 경사를 따라 이동
             }
+            if (_surface != null && _surface.ConveyorSpeed != 0f) v += tangent * _surface.ConveyorSpeed;   // 컨베이어 (노랑 →, 하늘 ←, Docs/101)
         }
         else
         {

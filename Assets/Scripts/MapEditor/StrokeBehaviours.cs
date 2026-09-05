@@ -8,8 +8,8 @@ using UnityEngine;
 public static class StrokeColorId
 {
     public const int Wall = 0;     // 검정 — 벽 (기본)
-    public const int Hide = 1;     // 하늘 — 은폐 구역 (미구현, 아래 TODO)
-    public const int Yellow = 2;   // 노랑 — 코어에서는 벽과 동일 (Docs/101: 골 흡수 후보)
+    public const int Hide = 1;     // 하늘 — 컨베이어 ← (왼쪽으로 밀어냄). 이름은 팔레트 번호 호환을 위해 유지
+    public const int Yellow = 2;   // 노랑 — 컨베이어 → (오른쪽으로 밀어냄)
     public const int Bounce = 3;   // 초록 — 바운스
     public const int Ice = 4;      // 파랑 — 얼음
     public const int Hazard = 5;   // 빨강 — 위험 구역
@@ -35,6 +35,8 @@ public class SurfaceModifier : MonoBehaviour
     public float ExtraGroundAccelTime = 0.45f;
     public float ExtraGroundDecelTime = 0.6f;
     public float FrictionMultiplier = 0.05f;
+    /// <summary>컨베이어: 서 있는 동안 지면 접선 방향으로 더해지는 속도 (u/s). + 오른쪽(노랑), − 왼쪽(하늘). 0 = 없음</summary>
+    public float ConveyorSpeed = 0f;
 }
 
 /// <summary>ColorId → 스트로크 오브젝트에 기능 컴포넌트 부착. MapLoader 가 BuildColliders 일 때만 호출한다 (에디터 미리보기에는 붙지 않음).</summary>
@@ -47,6 +49,7 @@ public static class StrokeBehaviours
         [Tooltip("파랑: 지상 가속 시간에 더하는 값 (기본 0.05 → 0.5)")] public float IceAccelTime = 0.45f;
         [Tooltip("파랑: 지상 감속 시간에 더하는 값 (기본 0 → 0.6)")] public float IceDecelTime = 0.6f;
         [Tooltip("파랑: 정지 마찰 배율 (기본 1.0 → 0.05)")] public float IceFrictionMultiplier = 0.05f;
+        [Tooltip("노랑(→)·하늘(←): 컨베이어가 밀어내는 속도 (u/s). 이동 속도 5 기준 3 이면 거슬러 걸을 수 있다")] public float ConveyorSpeed = 3f;
     }
 
     public static void Attach(GameObject strokeObject, int colorId, Settings settings)
@@ -69,12 +72,24 @@ public static class StrokeBehaviours
                 m.FrictionMultiplier = settings.IceFrictionMultiplier;
                 break;
             }
+            case StrokeColorId.Yellow:
+                Conveyor(strokeObject, +Mathf.Abs(settings.ConveyorSpeed));   // 노랑: 오른쪽으로
+                break;
             case StrokeColorId.Hide:
-                // TODO(Docs/101 1장 하늘색 은폐 구역): 스트로크가 닫힌 영역일 때 내부 판정 → 플레이어 스프라이트 알파 0.
-                //   닫힌 영역 판정(첫 점·끝 점 근접 + 폴리곤 내부 검사)이 필요해 이번 단계에서는 벽으로만 동작한다.
+                Conveyor(strokeObject, -Mathf.Abs(settings.ConveyorSpeed));   // 하늘: 왼쪽으로
                 break;
             default:
-                break;   // 검정·노랑: 기본 벽
+                break;   // 검정: 기본 벽
         }
+    }
+
+    /// <summary>컨베이어 표면: 마찰·가속은 기본값 그대로, 서 있으면 접선 방향으로 밀린다 (PlayerController 가 SurfaceModifier.ConveyorSpeed 를 더한다)</summary>
+    static void Conveyor(GameObject strokeObject, float speed)
+    {
+        var m = strokeObject.AddComponent<SurfaceModifier>();
+        m.ExtraGroundAccelTime = 0f;
+        m.ExtraGroundDecelTime = 0f;
+        m.FrictionMultiplier = 1f;
+        m.ConveyorSpeed = speed;
     }
 }

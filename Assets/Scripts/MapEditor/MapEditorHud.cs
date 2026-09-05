@@ -260,8 +260,8 @@ public class MapEditorHud : MonoBehaviour
         switch (colorId)
         {
             case 0: return "벽";
-            case 1: return "은폐(예정)";
-            case 2: return "벽";
+            case 1: return "컨베이어 ←";
+            case 2: return "컨베이어 →";
             case 3: return "바운스";
             case 4: return "얼음";
             case 5: return "위험(사망)";
