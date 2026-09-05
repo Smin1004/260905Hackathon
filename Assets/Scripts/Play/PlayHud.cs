@@ -252,7 +252,8 @@ public class PlayHud : MonoBehaviour
 
         // ---- 우상단: 타이머 패널 (에디터 HUD 와 동일 구성)
         var timer = Img("TimerPanel", _root, _panelDark, Color.white);
-        Place(timer.rectTransform, new Vector2(1, 1), new Vector2(1, 0.5f), new Vector2(-SideMargin, -79), new Vector2(176, 84));
+        const float TimerW = 236f;   // (QA) "남은 수정 시간" 이 박스 밖으로 나가지 않도록 넉넉히
+        Place(timer.rectTransform, new Vector2(1, 1), new Vector2(1, 0.5f), new Vector2(-SideMargin, -79), new Vector2(TimerW, 84));
         var ringRect = new Vector2(62, 62);
         var track = Img("RingTrack", timer.transform, _ringTrack, Color.white);
         Place(track.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(14, 0), ringRect);
@@ -266,14 +267,14 @@ public class PlayHud : MonoBehaviour
         _timerNumber = Txt("TimerNumber", timer.transform, "0", 22, FontStyle.Bold, Theme.TextPrimary, TextAnchor.MiddleCenter);
         Place(_timerNumber.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(14, 0), ringRect);
         _timerLabel = Txt("RemainingLabel", timer.transform, "남은 시간", 15, FontStyle.Normal, Theme.TextMuted, TextAnchor.MiddleLeft);
-        Place(_timerLabel.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(88, -14), new Vector2(84, 18));
+        Place(_timerLabel.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(88, -14), new Vector2(TimerW - 100, 18));
         _timerRemaining = Txt("RemainingTime", timer.transform, "0:00", 30, FontStyle.Bold, Theme.Accent, TextAnchor.MiddleLeft);
-        Place(_timerRemaining.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(88, -32), new Vector2(84, 40));
+        Place(_timerRemaining.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(88, -32), new Vector2(TimerW - 100, 40));
 
         // ---- 우상단: 기권 / 에디터로 돌아가기 (타이머 왼쪽)
         var abortBg = Img("AbortButton", _root, _btnDark, Color.white);
         abortBg.raycastTarget = true;
-        Place(abortBg.rectTransform, new Vector2(1, 1), new Vector2(1, 0.5f), new Vector2(-SideMargin - 176 - 14, -79), new Vector2(230, 48));
+        Place(abortBg.rectTransform, new Vector2(1, 1), new Vector2(1, 0.5f), new Vector2(-SideMargin - TimerW - 14, -79), new Vector2(230, 48));
         _abortBtn = abortBg.gameObject.AddComponent<Button>();
         _abortBtn.targetGraphic = abortBg;
         var colors = _abortBtn.colors;

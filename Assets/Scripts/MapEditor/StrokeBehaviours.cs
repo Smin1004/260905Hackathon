@@ -26,14 +26,14 @@ public class BounceStroke : MonoBehaviour
 
 /// <summary>
 /// 발밑 표면 보정 (파랑 = 얼음). PlayerController 는 이 위에 서 있는 동안만 값을 덧씌우고, 뜻(Vows)이 정한 기준값 자체는 건드리지 않는다.
-///   - 가속·감속 시간: 기준값과 MinGroundAccelTime/MinGroundDecelTime 중 큰 쪽 (기본 GroundDecelTime 이 0 이라 배율로는 표현 불가 → 하한 방식)
+///   - 가속·감속 시간: 기준값 + ExtraGroundAccelTime/ExtraGroundDecelTime (가산 — 기본 GroundDecelTime 이 0 이라 배율로는 표현 불가)
 ///   - 정지 마찰: 기준값 × FrictionMultiplier
-/// 따라서 "미끄러운 발" 뜻(0.5 / 0.6 / 0.05)과 겹치면 가속·감속은 같고 마찰만 더 낮아진다.
+/// 따라서 "미끄러운 발" 뜻(0.5 / 0.6 / 0.05)과 겹치면 가속 0.95·감속 1.2 로 더 미끄러워진다 (QA: 뜻 + 파랑이 무의미하던 문제).
 /// </summary>
 public class SurfaceModifier : MonoBehaviour
 {
-    public float MinGroundAccelTime = 0.5f;
-    public float MinGroundDecelTime = 0.6f;
+    public float ExtraGroundAccelTime = 0.45f;
+    public float ExtraGroundDecelTime = 0.6f;
     public float FrictionMultiplier = 0.05f;
 }
 
@@ -44,8 +44,8 @@ public static class StrokeBehaviours
     public class Settings
     {
         [Tooltip("초록: 착지 시 상승 속도 = JumpSpeed × 이 값")] public float BounceMultiplier = 1.3f;
-        [Tooltip("파랑: 지상 가속 시간 하한 (기본 0.05 → 0.5)")] public float IceAccelTime = 0.5f;
-        [Tooltip("파랑: 지상 감속 시간 하한 (기본 0 → 0.6)")] public float IceDecelTime = 0.6f;
+        [Tooltip("파랑: 지상 가속 시간에 더하는 값 (기본 0.05 → 0.5)")] public float IceAccelTime = 0.45f;
+        [Tooltip("파랑: 지상 감속 시간에 더하는 값 (기본 0 → 0.6)")] public float IceDecelTime = 0.6f;
         [Tooltip("파랑: 정지 마찰 배율 (기본 1.0 → 0.05)")] public float IceFrictionMultiplier = 0.05f;
     }
 
@@ -64,8 +64,8 @@ public static class StrokeBehaviours
             case StrokeColorId.Ice:
             {
                 var m = strokeObject.AddComponent<SurfaceModifier>();
-                m.MinGroundAccelTime = settings.IceAccelTime;
-                m.MinGroundDecelTime = settings.IceDecelTime;
+                m.ExtraGroundAccelTime = settings.IceAccelTime;
+                m.ExtraGroundDecelTime = settings.IceDecelTime;
                 m.FrictionMultiplier = settings.IceFrictionMultiplier;
                 break;
             }

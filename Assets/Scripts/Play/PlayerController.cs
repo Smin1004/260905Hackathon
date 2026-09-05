@@ -27,6 +27,7 @@ public class PlayerController : MonoBehaviour
     [Tooltip("0 → 최고 속도까지 걸리는 시간 (지상)")] public float GroundAccelTime = 0.05f;
     [Tooltip("최고 속도 → 0 까지 걸리는 시간 (지상). 0 = 즉시 정지")] public float GroundDecelTime = 0f;
     [Tooltip("0 → 최고 속도까지 걸리는 시간 (공중)")] public float AirAccelTime = 0.1f;
+    [Tooltip("가속 시간이 이 값 이하일 때만 방향 전환 시 즉시 제동(스냅). 얼음·미끄러운 발처럼 가속이 느리면 관성이 유지되어 반대 키를 눌러도 미끄러진다")] public float TurnSnapMaxAccelTime = 0.15f;
     [Tooltip("false 면 공중에서 수평 속도를 바꿀 수 없다 (뜻: 공중 제어 금지)")] public bool AirControl = true;
 
     [Header("점프")]
@@ -113,9 +114,9 @@ public class PlayerController : MonoBehaviour
 
     /// <summary>현재 발밑 표면 보정 (얼음 위가 아니면 null).</summary>
     public SurfaceModifier CurrentSurface => _surface;
-    /// <summary>얼음 등 표면 보정을 반영한 실효 지상 가속 시간. 뜻이 바꾼 GroundAccelTime 을 기준값으로 쓴다.</summary>
-    public float EffectiveGroundAccelTime => _surface != null ? Mathf.Max(GroundAccelTime, _surface.MinGroundAccelTime) : GroundAccelTime;
-    public float EffectiveGroundDecelTime => _surface != null ? Mathf.Max(GroundDecelTime, _surface.MinGroundDecelTime) : GroundDecelTime;
+    /// <summary>얼음 등 표면 보정을 반영한 실효 지상 가속 시간. 뜻이 바꾼 GroundAccelTime 에 표면의 추가 시간을 더한다 (가산 → 미끄러운 발 뜻과 겹치면 더 미끄럽다).</summary>
+    public float EffectiveGroundAccelTime => _surface != null ? GroundAccelTime + _surface.ExtraGroundAccelTime : GroundAccelTime;
+    public float EffectiveGroundDecelTime => _surface != null ? GroundDecelTime + _surface.ExtraGroundDecelTime : GroundDecelTime;
     public float EffectiveIdleFriction => _surface != null ? IdleFriction * _surface.FrictionMultiplier : IdleFriction;
 
     // ---- 비주얼
@@ -254,7 +255,7 @@ public class PlayerController : MonoBehaviour
         if (IsGrounded && !doJump)
         {
             var tangent = new Vector2(GroundNormal.y, -GroundNormal.x);        // 노멀에 수직, 오른쪽 방향
-            float decelTime = EffectiveGroundDecelTime;                          // 얼음 위에서는 하한이 적용됨 (Docs/101 파랑)
+            float decelTime = EffectiveGroundDecelTime;                          // 얼음 위에서는 추가 감속 시간이 더해짐 (Docs/101 파랑)
             if (idle)
             {
                 if (decelTime <= 0f) v = Vector2.zero;                                              // 정지 즉시 (마찰 재질이 경사에서 붙잡음)
@@ -336,7 +337,7 @@ public class PlayerController : MonoBehaviour
     float Accelerate(float current, float target, float accelTime, float dt)
     {
         if (Mathf.Approximately(target, 0f)) return 0f;                                      // 감속 즉시
-        if (!Mathf.Approximately(current, 0f) && Mathf.Sign(current) != Mathf.Sign(target)) current = 0f;   // 방향 전환 즉시 제동
+        if (accelTime <= TurnSnapMaxAccelTime && !Mathf.Approximately(current, 0f) && Mathf.Sign(current) != Mathf.Sign(target)) current = 0f;   // 방향 전환 즉시 제동 (미끄러운 상태에서는 관성 유지)
         if (accelTime <= 0f) return target;
         return Mathf.MoveTowards(current, target, (MoveSpeed / accelTime) * dt);
     }
