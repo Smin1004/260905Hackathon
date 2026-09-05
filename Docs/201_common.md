@@ -20,7 +20,7 @@
 |---|---|---|
 | **Boot** | UI/통합 담당 | 루트 씬. `GameManager`, 매치 흐름 FSM, `MatchData` 싱글턴, **애디티브 씬 전환** 담당 |
 | **Lobby** | 네트워크 담당 | 방 생성/코드 참가, 방 설정 UI, 뜻 선택 UI, 준비 동기화 |
-| **Editor** | 에디터 담당 | 드로잉 캔버스, 툴 UI, 스트로크 직렬화, 시작점 표시·골 배치 |
+| **MapEditor** | 에디터 담당 | 드로잉 캔버스, 툴 UI, 스트로크 직렬화, 시작점 표시·골 배치. (씬·폴더 이름을 `Editor`로 하면 Unity가 에디터 전용으로 취급해 빌드에서 빠지므로 **MapEditor** 사용) |
 | **Play** | 게임플레이 담당 | 플랫포머 물리, 뜻 제약, 맵 로딩(콜라이더 빌드), 검증/플레이 모드 공용 |
 | **Result** | UI/통합 담당 | 기록 비교, 랭킹 표시 |
 
@@ -113,15 +113,18 @@ class RoomSettings {
 
 ```
 Assets/
-├── Scenes/        Boot, Lobby, Editor, Play, Result
+├── Scenes/        Boot, Lobby, MapEditor, Play, Result
 ├── Scripts/
 │   ├── Common/    (MatchData, RoomSettings 등 공유 타입 — 201 관리)
-│   ├── Lobby/     ├── Editor/ ├── Play/ ├── Result/ ├── Network/
+│   ├── Lobby/     ├── MapEditor/ ├── Play/ ├── Result/ ├── Network/
+│   └── NetTest/   (멀티 검증 전용 — 게임 코드에서 참조 금지)
 ├── Prefabs/       기능별 하위 폴더, 소유자별 충돌 최소화
 ├── Art/  UI/  Audio/
 ```
 
 - 스크립트: `PascalCase` 클래스, 메서드/필드 팀 컨벤션 1개 유지 (첫 회의에서 간단히 합의)
+- **`Editor`라는 이름의 폴더는 Assets 아래 어디에도 만들지 않는다** — Unity 특수 폴더(에디터 전용 어셈블리, 빌드 제외)
+- 공유 타입 구현 현황: `Scripts/Common/MapData.cs`(MapConstants·StrokeData·MapData), `MapSerializer.cs`(바이너리+GZip, 청크), `MatchData.cs`(VowId·RoomSettings·PlayerRecord·MatchData 싱글턴), `StrokePalette.cs`(색상 테마 SO, `Assets/Resources/StrokePalette.asset`)
 - 프리팹은 기능 폴더에 저장, 소유자만 수정
 
 ## 7. 병합(Git) 규칙

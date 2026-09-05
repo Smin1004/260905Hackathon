@@ -53,4 +53,6 @@
 | 날짜 | 변경 |
 |---|---|
 | 2026-09-05 | Unity 6000.0.66f2·신 Input System으로 환경 확정. 조작키(A/D·←/→, W/↑, R) 확정. 방 설정에 **플레이 시간 제한** 추가(검증·교환 공용). 낙하 자동 리스폰(시도 미소모)·R키 리스폰(시도 +1)·리스폰 시 뜻 카운터 초기화. 캔버스 경계(바닥·왼쪽 벽 고정, 천장·오른쪽 개방). 골 자동 배치 삭제(직접 배치 필수). 뜻 선택 방식(목록/랜덤 후보, 뜻 없음 불가). 미클리어 기록 = PlayTimeLimit(제안). 닉네임 필드 추가 |
+| 2026-09-05 | **검증 플레이 구현** (`Scripts/Play/PlayerController.cs`, `PlaySession.cs`): 에디터 안에서 ▶ 검증 플레이 → 좌우 이동(A/D·←/→)·점프(W/↑), 그린 선이 벽, R 리스폰, ESC 에디터 복귀, 골 도달 = 검증 성공(패타임 기록), 검증 후에만 완료 가능. 에디터 수정: 지우개 깜빡임 제거(제자리 갱신), UI 바가 캔버스를 가리지 않게 카메라 맞춤, Ctrl+Z/Ctrl+Y 단축키·다시실행 |
+| 2026-09-05 | **맵 에디터 구현** (`Scenes/MapEditor.unity`, `Scripts/MapEditor/`, `Scripts/Common/`): 펜 굵기 3단계·색상 팔레트·구간 지우개·골 배치·스냅샷 실행취소, 양자화 바이너리+GZip 직렬화·4KB 청크·완료 시 왕복 검증. 공유 타입(MapData·MatchData·StrokePalette) 생성. 씬·폴더 이름 `Editor` → `MapEditor` (Unity 특수 폴더 회피) |
 | 2026-09-05 | **네트워크 백엔드 확정: PUN2 → Unity Multiplayer Services (Sessions + Relay) + Netcode for GameObjects.** 205 전면 개정 (준비 절차, 세션 프로퍼티, 이름 붙은 메시지, 4KB 맵 청크 분할, Multiplayer Play Mode 테스트). 후보 비교는 205 부록 A |

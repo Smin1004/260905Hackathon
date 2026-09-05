@@ -1,4 +1,4 @@
-# 203 — 맵 에디터 구현 (Editor 씬)
+# 203 — 맵 에디터 구현 (MapEditor 씬)
 
 > 드로잉 툴 → 스트로크 벡터 데이터 → 물리 오브젝트 파이프라인. 소유: 에디터 담당.
 > Play 씬은 건드리지 않고 **맵 로더 컴포넌트(프리팹+API)**로 납품한다 — `201_common.md` 소유권 규칙.
@@ -10,7 +10,7 @@
 | 캔버스 | 고정 크기 드로잉 영역 (월드 좌표와 1:1 대응) |
 | 시작점 | **고정** — 캔버스 왼쪽 하단에 앵커 표시, 편집 불가 |
 | 기본 경계 | **바닥·왼쪽 벽**은 고정 콜라이더 — 캔버스에 표시되지만 편집 불가. **천장·오른쪽은 개방** (그 밖은 낙하 판정) |
-| 툴 바 | 펜 / 실행취소(마지막 스트로크 삭제) / 전체 지우기 / **골 배치** |
+| 툴 바 | 펜 (**굵기 3단계 · 색상 팔레트**) / **지우개** (드래그한 구간을 잘라내 스트로크 분할, 반지름은 굵기 단계와 연동) / 실행취소·다시실행 (스냅샷 방식 — 그리기·지우기·골·전체지우기 모두 1단계씩. **Ctrl+Z / Ctrl+Y**, Ctrl+Shift+Z) / 전체 지우기 / **골 배치** / **▶ 검증 플레이** / 완료 |
 | 골 배치 | 골 버튼 → 캔버스 클릭 시 그 위치에 골 존 배치 (재클릭으로 이동) — 골 1개만, **필수** (자동 배치 없음) |
 | 타이머 | 그리기 시간 제한 표시 (방 설정값 — `100_game_design.md` 7.1) |
 | 제출 | 골 배치 + 검증 클리어 완료 시 활성화 |
@@ -24,8 +24,8 @@
 ```csharp
 class StrokeData {
     List<Vector2> Points;  // 월드 좌표 (순서 유지)
-    float Width;           // 선 굵기 (MVP: 고정값 1개)
-    int ColorId;           // 코어: 항상 0 (검정). 101 색상 시스템용 예약 필드
+    float Width;           // 선 굵기 — 프리셋 0.15 / 0.3 / 0.6u 중 하나 (MapConstants.PenWidths)
+    int ColorId;           // 팔레트 ID (StrokePalette SO: 0 검정 / 1 하늘 / 2 노랑 / 3 초록 / 4 파랑 / 5 빨강). 코어 로더는 모든 색을 벽으로 취급, 의미 부여는 101
 }
 ```
 
@@ -49,7 +49,10 @@ class StrokeData {
 | 스트로크 수 상한 | 60개 |
 | 스트로크당 점 상한 | 300점 |
 | 골 배치 | 필수 — 그리기 시간 만료 후 골 미배치면 **골 배치만 허용되는 상태**로 전환 (`100_game_design.md` 5장) |
-| 선 굵기 | 고정 (물리용 콜라이더 오프셋 계산 단순화) |
+| 선 굵기 | 프리셋 3단계 0.15 / 0.3 / 0.6u. 콜라이더 `edgeRadius` = 굵기 ÷ 2 |
+| 지우개 반지름 | 0.3 / 0.6 / 1.0u (굵기 단계와 짝) — 선 굵기의 절반을 더해 "보이는 선"이 지워지게 |
+| 골 최소 거리 | 시작점에서 3u 이상 (패타임 0.2초짜리 맵 방지) |
+| 실행취소 깊이 | 50단계 |
 
 ## 4. 스트로크 → 물리 변환 (맵 로더 컴포넌트)
 
@@ -57,9 +60,12 @@ class StrokeData {
 
 ```csharp
 interface ILoadableMap {
-    void Load(MapData map);   // 콜라이더 + 렌더러 생성
+    void Load(MapData map);   // 콜라이더 + 렌더러 + 기본 경계(바닥·왼쪽 벽) + 골 존 생성
     void Unload();
+    MapData Current { get; }
+    GoalZone Goal { get; }    // Goal.Reached 이벤트로 클리어 판정
 }
+// 구현: Scripts/MapEditor/MapLoader.cs (옵션: BuildBoundaries / BuildGoal / BuildColliders)
 ```
 
 - 스트로크 점 목록 → `EdgeCollider2D` (인접 점 2개씩 에지로 구성) — 선이 곧 벽
@@ -74,14 +80,18 @@ interface ILoadableMap {
 
 ## 5. 직렬화 & 전송
 
-- `MapData` → JSON 직렬화 → 네트워크 전송 (`205_network.md` 메시지 정의)
-- 크기 목표: 상한 적용 시(60스트로크 × 300점 × ~20B) 최대 ~360KB — **실제 전송 목표는 ≤100KB**
+- `MapData` → **양자화 바이너리(점당 4B: int16 x,y × 0.01u) + GZip** → 4KB 청크 → 네트워크 전송 (`205_network.md` 5장). 구현: `Scripts/Common/MapSerializer.cs` (`Serialize`/`Deserialize`, `MapChunker.Split`, `MapChunkAssembler`)
+- JSON(`JsonUtility`)은 점당 ~20B라 전송에 쓰지 않고 디버그 로그용으로만 둔다
+- 크기: 상한(60 × 300점)에서 압축 전 ≤ 72KB, 압축 후 보통 그 절반 — **전송 목표 ≤100KB** 안. 초과 시 에디터 UI에 경고
 - NGO 메시지는 기본 최대 페이로드가 수 KB라 `NetService`가 4KB 청크로 분할 전송한다 (`205_network.md` 5장). 청크 수를 25개 이내로 두기 위해 위 상한 + 아래 양자화 + 다운샘플로 목표 크기 유지. 초과 시 RDP 단순화 강제
-- 좌표는 소수 둘째 자리에서 반올림(양자화)해 데이터량 절감
+- 좌표는 소수 둘째 자리에서 반올림(양자화)해 데이터량 절감. **양자화는 스트로크 확정 시점(펜을 뗄 때) 즉시 적용** → 검증 플레이의 물리와 상대가 받는 전송본이 동일
+- 완료 버튼은 직렬화 → 역직렬화 왕복이 원본과 일치하는지 검사한 뒤에만 `MatchData.MyMap`에 반영하고 `Completed(map, payload)` 이벤트를 낸다 — `NetService.SendMap`이 이 이벤트를 구독
 
 ## 6. 검증 플레이와의 연계
 
-- 에디터에서 "검증 시작" → 현재 맵을 `MapData`로 확정 → Boot FSM이 Play 씬(검증 모드) 로드 — `202_gameplay.md` 3장
+- 에디터의 **[▶ 검증 플레이]** → 현재 맵을 `MapData`로 확정 → **MapEditor 씬 안에서 `PlaySession`을 띄워** 검증 (씬 전환 없음 → 그리던 상태·실행취소 기록 유지). 구현: `MapEditorController.StartVerification()` — `202_gameplay.md` 8장
+- 검증 중 ESC 또는 [에디터로 돌아가기] 버튼으로 언제든 복귀 (맵 수정 목적, 갇혔을 때 탈출). R 키는 시작점 리스폰
+- **골 도달 = 검증 성공** → 클리어 시간이 패타임. [완료] 버튼은 검증 성공 상태에서만 활성화되며, 맵을 수정(그리기·지우기·골 이동·실행취소)하면 검증이 무효가 되어 다시 클리어해야 한다
 - 검증 실패 → 에디터 복귀, 맵 수정 후 재검증
 - 검증 플레이에는 방 설정 **플레이 시간 제한**이 적용 — 만료 시 에디터 복귀. 검증 단계 총 상한(`플레이 시간 제한 × 2`) 초과 시 제출 실패 → 패배 (`100_game_design.md` 6장)
 - 검증 클리어 → **즉시 제출 확정** (수정 불가) → 패타임 기록, 상대 대기
@@ -100,6 +110,20 @@ interface ILoadableMap {
 - [ ] 시작점 고정 + 골 이동 배치 정상 동작
 - [ ] 직렬화 → 역직렬화 → 콜라이더 재생성 왕복 무손실
 - [ ] 실행취소/전체지우기 후 전송 데이터 정합성
+
+## 9. 구현 현황 (2026-09-05)
+
+| 파일 | 역할 |
+|---|---|
+| `Scenes/MapEditor.unity` | 에디터 씬 — Main Camera + `MapEditor` 오브젝트(`MapEditorController`) 2개뿐. UI·캔버스·이벤트시스템은 런타임 생성 |
+| `Scripts/MapEditor/MapEditorController.cs` | 도구 상태·입력(신 Input System `Pointer.current`)·실행취소·완료. 모든 조작이 public 메서드(`BeginStroke/AddPoint/EndStroke`, `EraseAt`, `SetGoal`, `Undo`, `ClearAll`, `Complete`)로 노출되어 UI·테스트가 같은 경로 |
+| `Scripts/MapEditor/MapEditorUI.cs` | 런타임 UI (플레이스홀더 — 공용 UI 킷 확정 후 프리팹 교체) |
+| `Scripts/MapEditor/StrokeGeometry.cs` | 양자화, RDP 단순화, 점 상한 강제, 원으로 잘라내기(지우개) — 순수 함수 |
+| `Scripts/MapEditor/StrokeVisual.cs` | 스트로크 → LineRenderer(+EdgeCollider2D). 에디터와 Play가 같은 코드 사용 |
+| `Scripts/MapEditor/MapLoader.cs` | `ILoadableMap` 구현 + `GoalZone` — Play 씬 납품 컴포넌트 |
+| `Scripts/MapEditor/CanvasView.cs` | 배경·격자·경계·시작점·골 마커, 카메라 맞춤 (상·하단 UI 바 비율을 빼고 남은 영역에 캔버스를 맞춰 UI 가 드로잉 영역을 가리지 않음) |
+
+미구현: 그리기 타이머(방 설정 연동), 제출 후 대기 오버레이, 검증 시 상대 뜻 적용(뜻 시스템 자체가 미구현).
 
 ---
 **관련 문서**: `202_gameplay.md` · `205_network.md` · `101_extra_design.md` · `201_common.md` · `100_game_design.md`

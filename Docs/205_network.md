@@ -65,9 +65,9 @@ WaitingRoom → VowSelect → MapEdit → Verify → WaitingSubmit → ExchangeP
 |---|---|---|
 | WaitingRoom | 양쪽 접속 완료 (`session.PlayerCount == 2` 또는 NGO `OnClientConnectedCallback`) | Lobby |
 | VowSelect | 양쪽 뜻 확정 동기화 | Lobby |
-| MapEdit | 진입 즉시 (그리기 타이머 로컬 카운트) | Editor |
-| Verify | 자기 검증 결과에 따라 개별 진행 (비동기) | Play(검증 모드) ↔ Editor |
-| WaitingSubmit | 양쪽 제출(검증 클리어) 완료 | Editor 대기 오버레이 |
+| MapEdit | 진입 즉시 (그리기 타이머 로컬 카운트) | MapEditor |
+| Verify | 자기 검증 결과에 따라 개별 진행 (비동기) | Play(검증 모드) ↔ MapEditor |
+| WaitingSubmit | 양쪽 제출(검증 클리어) 완료 | MapEditor 대기 오버레이 |
 | ExchangePlay | 양쪽 제출 확인 → 동시 시작 | Play(교환 모드) |
 | Result | 양쪽 결과 수신 완료 | Result |
 
@@ -82,14 +82,14 @@ WaitingRoom → VowSelect → MapEdit → Verify → WaitingSubmit → ExchangeP
 | 메시지명 | 페이로드 | 방향 | 전달 방식 |
 |---|---|---|---|
 | `VowSelected` | `vowId`(int), `nickname`(string) | 양방향 | ReliableSequenced |
-| `MapChunk` | `chunkIndex`(int), `chunkCount`(int), `bytes`(byte[] ≤ 4KB) — `MapData` JSON UTF-8를 4KB 단위로 분할 | 각자 → 상대 | ReliableSequenced |
+| `MapChunk` | `chunkIndex`(int), `chunkCount`(int), `bytes`(byte[] ≤ 4KB) — `MapSerializer.Serialize(map)` 결과(양자화 바이너리+GZip)를 `MapChunker.Split`으로 4KB 분할 | 각자 → 상대 | ReliableSequenced |
 | `VerifyComplete` | `parTime`(float) | 각자 → 상대 | ReliableSequenced |
 | `PlayResult` | `PlayerRecord` (`206_ranking.md`) — 필드 4개 직접 직렬화 | 각자 → 상대 | ReliableSequenced |
 | `SubmitFailed` | 없음 — 검증 단계 총 상한 초과 통지 → 수신측 승리로 Result 전환 (`100_game_design.md` 6장) | 각자 → 상대 | ReliableSequenced |
 | (콜백) 접속 끊김 | NGO `OnClientDisconnectCallback` / 세션 `RemovedFromSession` → `MatchAbort` 이벤트로 변환 | 시스템 | — |
 
 - 데이터 전송은 **확정 시점에만** (그리기 중 전송 없음 — 라이브 관전은 스코프 아웃)
-- **맵 청크 분할이 필수**: NGO/Unity Transport의 기본 최대 페이로드(수 KB)보다 `MapData`가 크다. 송신측은 JSON → UTF-8 → 4KB 청크로 나눠 순서대로 보내고, 수신측은 `chunkCount`개를 모아 조립 후 `MatchData.OpponentMap`에 반영. `MapChunk`는 ReliableSequenced라 순서·누락 걱정 없음
+- **맵 청크 분할이 필수**: NGO/Unity Transport의 기본 최대 페이로드(수 KB)보다 `MapData`가 크다. 송신측은 `MapSerializer.Serialize` → `MapChunker.Split`(4KB)로 나눠 순서대로 보내고, 수신측은 `MapChunkAssembler.Add`로 모아 완성 시 `MapSerializer.Deserialize` → `MatchData.OpponentMap`. `MapChunk`는 ReliableSequenced라 순서·누락 걱정 없음. 송신 지점은 `MapEditorController.Completed(map, payload)` 이벤트
 - `MapData` 자체 크기는 양자화·다운샘플로 ≤100KB 유지 (`203_map_editor.md` 5장) → 청크 25개 이내
 - 수신측은 `MatchData`에 반영 후 Boot FSM에 C# 이벤트로 보고
 
