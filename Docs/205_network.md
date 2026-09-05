@@ -146,7 +146,7 @@ class NetService : MonoBehaviour {
 
 | 파일 | 역할 |
 |---|---|
-| `Scripts/Network/NetService.cs` | 6장 래퍼 구현. `Init`(익명 로그인, 인스턴스별 프로필) → `CreateRoom`/`JoinRoom`(Sessions + Relay, SDK 가 NGO Host/Client 자동 시작) → NGO 시작 대기 후 이름 붙은 메시지 핸들러 등록. 메시지: `CJ_Hello`(닉네임 + 호스트→클라 방 설정), `CJ_MapMeta`(패타임·크기·청크 수), `CJ_MapChunk`(4KB, ReliableFragmentedSequenced), `CJ_PlayResult`. 끊김은 NGO 연결 해제 콜백 + 세션 이벤트 → `MatchAborted` 1회 |
+| `Scripts/Network/NetService.cs` | 6장 래퍼 구현. `Init`(익명 로그인, 인스턴스별 프로필) → `CreateRoom`/`JoinRoom`(Sessions + Relay, SDK 가 NGO Host/Client 자동 시작) → NGO 시작 대기 후 이름 붙은 메시지 핸들러 등록. 메시지: `CJ_Hello`(닉네임 + 호스트→클라 방 설정 6종: 패타임 모드·시도·그리기·플레이 시간·뜻 개수·후보 수), `CJ_Vows`(뜻 ID 목록 — 양쪽 확정 시 교환), `CJ_MapMeta`(패타임·크기·청크 수), `CJ_MapChunk`(4KB, ReliableFragmentedSequenced), `CJ_PlayResult`, `CJ_NextRound`, `CJ_SubmitFailed`(그리기 시간 초과 → 그 라운드 패배). 끊김은 NGO 연결 해제 콜백 + 세션 이벤트 → `MatchAborted` 1회 |
 | `Scripts/Boot/GameFlow.cs` | 4장 FSM. Boot 씬 상주(DontDestroyOnLoad). 로비 UI(닉네임·방 만들기·코드 참가) → Hello 교환 시 MapEditor 애디티브 로드 → 에디터 `Completed` 구독 → 잠금 + `SendMap` → 내 제출 ∧ 상대 맵 수신 시 MapEditor 언로드·Play 로드 → `PlayBootstrap.Finished` 로 결과 전송 → 양쪽 결과 시 `Ranking` 판정 결과 화면. **결과 화면 [다음 라운드]**: 양쪽이 누르면(`CJ_NextRound`) 같은 방에서 MapEdit 부터 반복 — 방을 새로 만들지 않는다. **[방 나가기]**는 에디터 우상단 바·로비 대기·결과 화면에 있으며 제자리 초기화로 로비 복귀(씬 재로드·싱글턴 파괴 없음). 끊김 → "매치 무효" 화면, 호스트는 [같은 방에서 새 상대 기다리기] 가능 |
 | `Scripts/Play/PlayBootstrap.cs` | Play 씬 진입점. `MatchData.OpponentMap` 으로 `PlaySession`(교환 모드: 시간·시도 제한, ESC=기권) 실행. 상대 맵이 없으면 데모 맵 (단독 실행 가능) |
 | `Scripts/Common/Ranking.cs` | 206 계산식 순수 함수 (`EffectiveTime`, `Score`, `Judge`) |

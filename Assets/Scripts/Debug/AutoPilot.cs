@@ -75,6 +75,16 @@ public class AutoPilot : MonoBehaviour
 
         for (int round = 1; round <= _rounds; round++)
         {
+            // 뜻 선택: 후보 중 무작위로 필요한 개수를 골라 확정
+            if (_flow.State == MatchState.VowSelect)
+            {
+                yield return new WaitForSeconds(0.5f);
+                var picks = new System.Collections.Generic.List<VowId>();
+                foreach (var d in _flow.VowCandidates) { picks.Add(d.Id); if (picks.Count >= _flow.VowPickCount) break; }
+                Log($"[R{round}] 뜻 선택: " + VowCatalog.NamesOf(picks));
+                _flow.ConfirmVows(picks);
+                while (_flow.State == MatchState.VowSelect) yield return null;
+            }
             if (_flow.State != MatchState.MapEdit) { Log("실패: 상태 " + _flow.State + " — " + _flow.LastError); yield break; }
             while (_flow.Editor == null) yield return null;
             yield return new WaitForSeconds(_delay);

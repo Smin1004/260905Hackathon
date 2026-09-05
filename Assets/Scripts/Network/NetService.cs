@@ -41,6 +41,8 @@ public class NetService : MonoBehaviour
     const string MsgMapChunk = "CJ_MapChunk";
     const string MsgPlayResult = "CJ_PlayResult";
     const string MsgNextRound = "CJ_NextRound";
+    const string MsgSubmitFailed = "CJ_SubmitFailed";
+    const string MsgVows = "CJ_Vows";
     const float LeaveTimeoutSeconds = 4f;
     const int MaxPlayers = 2;
     const float NetcodeStartTimeout = 20f;
@@ -69,6 +71,10 @@ public class NetService : MonoBehaviour
     public event Action<PlayerRecord> ResultReceived;
     /// <summary>상대가 [다음 라운드] 준비 완료</summary>
     public event Action NextRoundReceived;
+    /// <summary>상대가 그리기 시간 안에 맵을 제출하지 못함 (Docs/100 6장 제출 실패 → 패배)</summary>
+    public event Action SubmitFailedReceived;
+    /// <summary>상대가 고른 뜻 목록</summary>
+    public event Action<System.Collections.Generic.List<VowId>> VowsReceived;
     /// <summary>사유 문구. 한 매치에 1회만 발생</summary>
     public event Action<string> MatchAborted;
 
@@ -281,6 +287,8 @@ public class NetService : MonoBehaviour
         cmm.RegisterNamedMessageHandler(MsgMapChunk, OnMapChunk);
         cmm.RegisterNamedMessageHandler(MsgPlayResult, OnPlayResult);
         cmm.RegisterNamedMessageHandler(MsgNextRound, OnNextRound);
+        cmm.RegisterNamedMessageHandler(MsgSubmitFailed, OnSubmitFailed);
+        cmm.RegisterNamedMessageHandler(MsgVows, OnVows);
 
         UnhookNetcode();
         _onConnected = OnClientConnected;
@@ -394,6 +402,8 @@ public class NetService : MonoBehaviour
                 w.WriteValueSafe(Settings.AttemptLimit);
                 w.WriteValueSafe(Settings.DrawTimeLimit);
                 w.WriteValueSafe(Settings.PlayTimeLimit);
+                w.WriteValueSafe(Settings.VowPickCount);
+                w.WriteValueSafe(Settings.VowCandidateCount);
             }
             w.WriteValueSafe(_helloReceived);   // ack: 나는 네 Hello 를 이미 받았다
             Send(MsgHello, w, NetworkDelivery.ReliableSequenced);
@@ -457,6 +467,47 @@ public class NetService : MonoBehaviour
         }
     }
 
+    public void SendVows(System.Collections.Generic.IList<VowId> vows)
+    {
+        if (!CanSend()) { Debug.LogWarning("[NetService] SendVows: 상대와 연결되지 않음"); return; }
+        var w = new FastBufferWriter(64, Allocator.Temp, 1024);
+        using (w)
+        {
+            int n = vows == null ? 0 : vows.Count;
+            w.WriteValueSafe(n);
+            for (int i = 0; i < n; i++) w.WriteValueSafe((int)vows[i]);
+            Send(MsgVows, w, NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    void OnVows(ulong sender, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out int n);
+        var list = new System.Collections.Generic.List<VowId>();
+        for (int i = 0; i < n && i < 16; i++) { reader.ReadValueSafe(out int id); list.Add((VowId)id); }
+        SetStatus("상대의 뜻 수신: " + VowCatalog.NamesOf(list));
+        VowsReceived?.Invoke(list);
+    }
+
+    public void SendSubmitFailed()
+    {
+        if (!CanSend()) { Debug.LogWarning("[NetService] SendSubmitFailed: 상대와 연결되지 않음"); return; }
+        var w = new FastBufferWriter(16, Allocator.Temp, 64);
+        using (w)
+        {
+            w.WriteValueSafe(1);
+            Send(MsgSubmitFailed, w, NetworkDelivery.ReliableSequenced);
+        }
+        SetStatus("그리기 시간 초과 — 제출 실패를 상대에게 알림");
+    }
+
+    void OnSubmitFailed(ulong sender, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out int _);
+        SetStatus("상대가 그리기 시간 안에 맵을 제출하지 못했습니다");
+        SubmitFailedReceived?.Invoke();
+    }
+
     void OnNextRound(ulong sender, FastBufferReader reader)
     {
         reader.ReadValueSafe(out int _);
@@ -502,6 +553,8 @@ public class NetService : MonoBehaviour
             reader.ReadValueSafe(out s.AttemptLimit);
             reader.ReadValueSafe(out s.DrawTimeLimit);
             reader.ReadValueSafe(out s.PlayTimeLimit);
+            reader.ReadValueSafe(out s.VowPickCount);
+            reader.ReadValueSafe(out s.VowCandidateCount);
         }
         reader.ReadValueSafe(out bool acked);
 

@@ -1,9 +1,6 @@
 using System;
 using UnityEngine;
 
-/// <summary>뜻(제약) 목록 — Docs/100 4.1, Docs/202 2장. None은 "미선택" 상태 표시용이며 플레이어가 고를 수 없다.</summary>
-public enum VowId { None = 0, NoJump, SpeedCap, NoBackward, JumpLimit3, NoIdle }
-
 /// <summary>방 설정 4종 — Docs/100 7.1, Docs/205 3장 세션 프로퍼티와 1:1.</summary>
 [Serializable]
 public class RoomSettings
@@ -15,6 +12,10 @@ public class RoomSettings
     public int DrawTimeLimit = 300;
     /// <summary>초. 120 / 180 / 300 — 검증·교환 플레이 공용</summary>
     public int PlayTimeLimit = 180;
+    /// <summary>라운드마다 각자 고르는 뜻의 개수 (Docs/100 4.1 "N개 선택")</summary>
+    public int VowPickCount = 1;
+    /// <summary>제시되는 후보 수 (전체 이상이면 전체). 0 = 전체</summary>
+    public int VowCandidateCount = 5;
 }
 
 /// <summary>플레이 결과 — Docs/206 1장.</summary>
@@ -55,8 +56,10 @@ public class MatchData : MonoBehaviour
         }
     }
 
-    public VowId MyVow;
-    public VowId OpponentVow;
+    /// <summary>내가 고른 뜻 — 교환 플레이(상대 맵)에 적용</summary>
+    public System.Collections.Generic.List<VowId> MyVows = new System.Collections.Generic.List<VowId>();
+    /// <summary>상대가 고른 뜻 — 내 맵 검증 플레이에 적용, 에디터에 표시</summary>
+    public System.Collections.Generic.List<VowId> OpponentVows = new System.Collections.Generic.List<VowId>();
     public MapData MyMap;            // 내가 만든 맵 (검증 완료본)
     public MapData OpponentMap;      // 상대가 만든 맵
     public RoomSettings Settings = new RoomSettings();
@@ -77,7 +80,7 @@ public class MatchData : MonoBehaviour
     /// <summary>같은 방에서 다시 하기 — 방 설정·닉네임은 유지.</summary>
     public void ResetMatch()
     {
-        MyVow = OpponentVow = VowId.None;
+        MyVows.Clear(); OpponentVows.Clear();
         MyMap = OpponentMap = null;
         MyParTime = OpponentParTime = 0f;
         MyResult = OpponentResult = null;

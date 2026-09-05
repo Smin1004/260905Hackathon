@@ -4,12 +4,12 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public enum MatchState { Lobby, WaitingOpponent, MapEdit, WaitingSubmit, ExchangePlay, WaitingResult, Result, WaitingNextRound, Aborted }
+public enum MatchState { Lobby, WaitingOpponent, VowSelect, MapEdit, WaitingSubmit, ExchangePlay, WaitingResult, Result, WaitingNextRound, Aborted }
 
 /// <summary>
 /// 매치 흐름 FSM (Boot 씬, Docs/205 4장). Boot 씬은 항상 남고 MapEditor / Play 씬을 애디티브로 얹는다.
 ///
-///   Lobby → (방 생성/참가) → WaitingOpponent → (Hello 교환) → MapEdit
+///   Lobby → (방 생성/참가) → WaitingOpponent → (Hello 교환) → VowSelect (각자 뜻 선택, 양쪽 확정·교환) → MapEdit
 ///   → (내 맵 완료: 전송 + 잠금) WaitingSubmit → (내 제출 + 상대 맵 수신) ExchangePlay
 ///   → (내 플레이 종료: 결과 전송) WaitingResult → (상대 결과 수신) Result
 ///   → [다음 라운드] 양쪽 준비 → 같은 방에서 MapEdit 부터 다시 (라운드 반복 — 방을 새로 만들지 않는다)
@@ -30,6 +30,14 @@ public class GameFlow : MonoBehaviour
     public MapEditorController Editor { get; private set; }
     public string LastError { get; private set; }
     public int Round { get; private set; } = 1;
+    /// <summary>이번 라운드에 제시된 뜻 후보 (VowSelect 상태에서 유효)</summary>
+    public System.Collections.Generic.List<VowDef> VowCandidates { get; private set; } = new System.Collections.Generic.List<VowDef>();
+    /// <summary>골라야 하는 뜻 개수 (방 설정)</summary>
+    public int VowPickCount => Mathf.Max(1, _data != null ? _data.Settings.VowPickCount : 1);
+    /// <summary>방 설정의 그리기 시간 제한 (초). 0 이면 없음</summary>
+    public float DrawTimeLimit => _data != null ? _data.Settings.DrawTimeLimit : 0f;
+    /// <summary>이번 라운드 그리기 남은 시간 (초). 타이머가 없으면 -1. MapEditorHud 가 표시에 사용</summary>
+    public float DrawTimeRemaining => _drawDeadline < 0f ? -1f : Mathf.Max(0f, _drawDeadline - Time.time);
 
     const string SceneMapEditor = "MapEditor";
     const string ScenePlay = "Play";
@@ -39,6 +47,10 @@ public class GameFlow : MonoBehaviour
     Camera _bootCamera;
     bool _mySubmitted, _opponentMapReceived, _myResultSent, _opponentResultReceived;
     bool _nextRoundMine, _nextRoundTheirs;
+    bool _forfeitMine, _forfeitTheirs, _forfeitShown;
+    bool _myVowsConfirmed, _opponentVowsReceived;
+    readonly System.Collections.Generic.List<VowId> _vowPicks = new System.Collections.Generic.List<VowId>();
+    float _drawDeadline = -1f;   // Time.time 기준 그리기 마감. -1 = 타이머 없음
     bool _busy, _leaving, _editorLoadStarted, _transitioning;
     AsyncOperation _pendingLoad;   // 진행 중인 애디티브 로드 — 중단 시 완료를 기다려 정리
 
@@ -49,6 +61,11 @@ public class GameFlow : MonoBehaviour
     InputField _nickInput, _codeInput;
     Button _createBtn, _joinBtn, _lobbyLeaveBtn, _nextRoundBtn, _resultLeaveBtn, _waitNewBtn, _roomBarLeaveBtn;
     GameObject _roomBar;
+    GameObject _vowPanel, _vowInfoPanel;
+    Transform _vowCardRoot;
+    Text _vowTitle, _vowHint, _vowInfoText;
+    Button _vowConfirmBtn;
+    readonly System.Collections.Generic.List<Button> _vowCardButtons = new System.Collections.Generic.List<Button>();
 
     // ------------------------------------------------------------------ lifecycle
 
@@ -68,6 +85,8 @@ public class GameFlow : MonoBehaviour
         _net.MapReceived += OnOpponentMapReceived;
         _net.ResultReceived += OnOpponentResult;
         _net.NextRoundReceived += OnOpponentNextRound;
+        _net.SubmitFailedReceived += OnOpponentForfeit;
+        _net.VowsReceived += OnOpponentVows;
         _net.MatchAborted += OnMatchAborted;
         PlayBootstrap.Finished += OnMyPlayFinished;
 
@@ -106,10 +125,18 @@ public class GameFlow : MonoBehaviour
             _net.MapReceived -= OnOpponentMapReceived;
             _net.ResultReceived -= OnOpponentResult;
             _net.NextRoundReceived -= OnOpponentNextRound;
+            _net.SubmitFailedReceived -= OnOpponentForfeit;
+            _net.VowsReceived -= OnOpponentVows;
             _net.MatchAborted -= OnMatchAborted;
         }
         PlayBootstrap.Finished -= OnMyPlayFinished;
         if (Instance == this) Instance = null;
+    }
+
+    void Update()
+    {
+        // 그리기 시간 만료 → 제출 실패 = 이번 라운드 패배 (Docs/100 6장). 이미 제출했으면 타이머 무관
+        if (State == MatchState.MapEdit && !_mySubmitted && _drawDeadline > 0f && Time.time >= _drawDeadline) ForfeitByTimeout();
     }
 
     // ------------------------------------------------------------------ lobby actions (UI / AutoPilot)
@@ -242,9 +269,113 @@ public class GameFlow : MonoBehaviour
         if (_editorLoadStarted || _leaving || State == MatchState.Aborted) return;
         if (State == MatchState.WaitingOpponent || (State == MatchState.Lobby && _busy))
         {
-            _editorLoadStarted = true;
-            StartCoroutine(LoadMapEditor());
+            _editorLoadStarted = true;   // 이 라운드의 진입은 한 번만
+            StartVowSelect();
         }
+    }
+
+    // ------------------------------------------------------------------ 뜻 선택 (Docs/100 4.1)
+
+    void StartVowSelect()
+    {
+        SetState(MatchState.VowSelect);
+        _myVowsConfirmed = false;
+        _vowPicks.Clear();
+        _data.MyVows.Clear();
+        int candidateCount = _data.Settings.VowCandidateCount;
+        VowCandidates = VowCatalog.RandomCandidates(candidateCount);
+        BuildVowCards();
+        ShowPanel(_vowPanel);
+        _vowTitle.text = $"라운드 {Round} — 뜻을 {VowPickCount}개 고르세요";
+        _vowHint.text = _opponentVowsReceived ? $"상대는 이미 골랐습니다: {VowCatalog.NamesOf(_data.OpponentVows)}" : "내가 고른 뜻은 상대 맵을 플레이할 때 나에게 걸립니다. 상대는 이 뜻을 보고 맵을 그립니다.";
+        _vowConfirmBtn.interactable = false;
+        _vowConfirmBtn.GetComponentInChildren<Text>().text = "확정";
+    }
+
+    /// <summary>후보 카드 토글 (UI). 선택 개수가 VowPickCount 가 되면 확정 가능.</summary>
+    public void ToggleVowPick(VowId id)
+    {
+        if (State != MatchState.VowSelect || _myVowsConfirmed) return;
+        if (_vowPicks.Contains(id)) _vowPicks.Remove(id);
+        else if (_vowPicks.Count < VowPickCount) _vowPicks.Add(id);
+        else { _vowPicks.RemoveAt(0); _vowPicks.Add(id); }   // 꽉 찼으면 가장 먼저 고른 것을 교체
+        RefreshVowCards();
+    }
+
+    /// <summary>뜻 확정 (UI·AutoPilot). picks 가 null 이면 현재 토글된 선택을 사용.</summary>
+    public bool ConfirmVows(System.Collections.Generic.IList<VowId> picks = null)
+    {
+        if (State != MatchState.VowSelect || _myVowsConfirmed) return false;
+        if (picks != null) { _vowPicks.Clear(); foreach (var v in picks) if (!_vowPicks.Contains(v) && VowCatalog.Get(v) != null) _vowPicks.Add(v); }
+        if (_vowPicks.Count != VowPickCount) return false;
+        _myVowsConfirmed = true;
+        _data.MyVows.Clear(); _data.MyVows.AddRange(_vowPicks);
+        _net.SendVows(_data.MyVows);
+        Debug.Log("[GameFlow] 내 뜻 확정: " + VowCatalog.NamesOf(_data.MyVows));
+        _vowConfirmBtn.interactable = false;
+        _vowConfirmBtn.GetComponentInChildren<Text>().text = "확정됨";
+        _vowHint.text = _opponentVowsReceived ? $"상대의 뜻: {VowCatalog.NamesOf(_data.OpponentVows)} — 곧 시작합니다" : "확정 완료. 상대가 뜻을 고르는 중...";
+        RefreshVowCards();
+        TryFinishVowSelect();
+        return true;
+    }
+
+    void OnOpponentVows(System.Collections.Generic.List<VowId> vows)
+    {
+        if (_leaving || State == MatchState.Aborted) return;
+        _data.OpponentVows.Clear(); _data.OpponentVows.AddRange(vows);
+        _opponentVowsReceived = true;
+        Debug.Log("[GameFlow] 상대 뜻 수신: " + VowCatalog.NamesOf(vows));
+        if (State == MatchState.VowSelect && _vowHint != null)
+            _vowHint.text = _myVowsConfirmed ? $"상대의 뜻: {VowCatalog.NamesOf(vows)} — 곧 시작합니다" : $"상대는 이미 골랐습니다: {VowCatalog.NamesOf(vows)}";
+        TryFinishVowSelect();
+    }
+
+    void TryFinishVowSelect()
+    {
+        if (State != MatchState.VowSelect || _transitioning || _leaving) return;
+        if (!_myVowsConfirmed || !_opponentVowsReceived) return;
+        StartCoroutine(LoadMapEditor());
+    }
+
+    void BuildVowCards()
+    {
+        foreach (var b in _vowCardButtons) if (b != null) Destroy(b.gameObject);
+        _vowCardButtons.Clear();
+        int n = VowCandidates.Count;
+        if (n == 0) return;
+        float gap = 0.015f, totalW = 0.9f, w = (totalW - gap * (n - 1)) / n, x0 = 0.05f;
+        for (int i = 0; i < n; i++)
+        {
+            var d = VowCandidates[i];
+            float x = x0 + i * (w + gap);
+            var btn = RuntimeUI.Button(_vowCardRoot, new Vector2(x, 0f), new Vector2(x + w, 1f), "", () => ToggleVowPick(d.Id), new Color(0.22f, 0.24f, 0.30f), 20);
+            var label = btn.GetComponentInChildren<Text>();
+            label.alignment = TextAnchor.UpperCenter;
+            label.text = $"\n{d.Name}\n\n<size=18>{d.Description}</size>\n\n<size=16>난이도 {new string('★', d.Tier)}</size>";
+            label.supportRichText = true;
+            _vowCardButtons.Add(btn);
+        }
+        RefreshVowCards();
+    }
+
+    void RefreshVowCards()
+    {
+        for (int i = 0; i < _vowCardButtons.Count && i < VowCandidates.Count; i++)
+        {
+            bool sel = _vowPicks.Contains(VowCandidates[i].Id);
+            _vowCardButtons[i].GetComponent<Image>().color = sel ? new Color(0.25f, 0.55f, 0.95f) : new Color(0.22f, 0.24f, 0.30f);
+            _vowCardButtons[i].interactable = !_myVowsConfirmed;
+        }
+        if (_vowConfirmBtn != null && !_myVowsConfirmed) _vowConfirmBtn.interactable = _vowPicks.Count == VowPickCount;
+    }
+
+    void ShowVowInfo(bool visible)
+    {
+        if (_vowInfoPanel == null) return;
+        _vowInfoPanel.SetActive(visible);
+        if (visible && _vowInfoText != null)
+            _vowInfoText.text = $"상대의 뜻\n<size=26><b>{VowCatalog.NamesOf(_data.OpponentVows)}</b></size>\n<size=15>상대는 이 제약을 지키며 내 맵을 플레이합니다. 검증도 이 뜻으로 합니다.</size>\n\n내 뜻\n<size=22>{VowCatalog.NamesOf(_data.MyVows)}</size>";
     }
 
     void OnMapChunkProgress(int received, int total)
@@ -317,13 +448,75 @@ public class GameFlow : MonoBehaviour
         Editor = FindFirstObjectByType<MapEditorController>();
         if (Editor == null) { OnMatchAborted("MapEditor 씬에 MapEditorController 가 없습니다."); yield break; }
         Editor.Completed += OnMyMapCompleted;
-        ShowRoomBar($"라운드 {Round} · 방 {_net.RoomCode} · 상대 {_data.OpponentNickname}");
-        Debug.Log($"[GameFlow] 라운드 {Round} 맵 제작 시작 — 상대 {_data.OpponentNickname}, 플레이 시간 제한 {_data.Settings.PlayTimeLimit}s");
+        Editor.VerificationChanged += OnEditorVerification;
+        _drawDeadline = DrawTimeLimit > 0f ? Time.time + DrawTimeLimit : -1f;
+        SetRoomBarVisible(true);
+        ShowVowInfo(true);
+        Debug.Log($"[GameFlow] 라운드 {Round} 맵 제작 시작 — 상대 {_data.OpponentNickname}, 그리기 {DrawTimeLimit}s, 플레이 {_data.Settings.PlayTimeLimit}s");
+    }
+
+    /// <summary>검증 플레이 중에는 PlaySession HUD 가 우상단을 쓰므로 방 나가기 버튼을 숨긴다 (겹침 방지)</summary>
+    void OnEditorVerification(bool inVerification)
+    {
+        SetRoomBarVisible(!inVerification && State == MatchState.MapEdit);
+        ShowVowInfo(!inVerification && State == MatchState.MapEdit);   // 검증 HUD 가 뜻을 직접 표시
+    }
+
+    void ForfeitByTimeout()
+    {
+        _drawDeadline = -1f;
+        _forfeitMine = true;
+        if (Editor != null) { if (Editor.InVerification) Editor.StopVerification(); Editor.SetLocked(true); }
+        _net.SendSubmitFailed();
+        Debug.Log("[GameFlow] 그리기 시간 초과 — 이번 라운드 패배");
+        StartCoroutine(ShowForfeitResult());
+    }
+
+    void OnOpponentForfeit()
+    {
+        if (_leaving || State == MatchState.Aborted || State == MatchState.Lobby || State == MatchState.WaitingOpponent) return;
+        if (State != MatchState.MapEdit && State != MatchState.WaitingSubmit && State != MatchState.Result) return;
+        _forfeitTheirs = true;
+        _drawDeadline = -1f;
+        if (Editor != null) { if (Editor.InVerification) Editor.StopVerification(); Editor.SetLocked(true); }
+        if (_forfeitShown) { RenderForfeitText(); return; }   // 양쪽 동시 초과 → 무승부로 갱신
+        StartCoroutine(ShowForfeitResult());
+    }
+
+    IEnumerator ShowForfeitResult()
+    {
+        if (_forfeitShown) yield break;
+        _forfeitShown = true;
+        _transitioning = true;
+        SetState(MatchState.Result);
+        yield return UnloadContentScenes();
+        _transitioning = false;
+        if (_leaving) yield break;
+        ShowPanel(_resultPanel);
+        RenderForfeitText();
+        _nextRoundBtn.gameObject.SetActive(true);
+        _nextRoundBtn.interactable = true;
+        _nextRoundBtn.GetComponentInChildren<Text>().text = "다음 라운드 (같은 방)";
+        _waitNewBtn.gameObject.SetActive(false);
+        _resultLeaveBtn.gameObject.SetActive(true);
+        SetResultHint(_nextRoundTheirs ? "상대가 다음 라운드를 기다리고 있습니다" : "");
+    }
+
+    void RenderForfeitText()
+    {
+        if (_resultTitle == null) return;
+        bool both = _forfeitMine && _forfeitTheirs;
+        _resultTitle.text = both ? "무승부" : (_forfeitMine ? "패배" : "승리");
+        string who = both ? "양쪽 모두" : (_forfeitMine ? _data.MyNickname + " (나)" : _data.OpponentNickname);
+        _resultBody.text = $"라운드 {Round}\n\n그리기 시간({DrawTimeLimit:0}초) 안에 맵을 제출하지 못함: {who}\n" +
+                           (both ? "두 사람 모두 제출하지 못해 무승부입니다." : (_forfeitMine ? "제출 실패는 그 라운드 패배로 처리됩니다." : "상대의 제출 실패로 이 라운드는 승리입니다."));
+        Debug.Log($"[GameFlow] 결과(제출 실패): {_resultTitle.text} — {who}");
     }
 
     void OnMyMapCompleted(MapData map, byte[] payload)
     {
-        if (_mySubmitted || State == MatchState.Aborted || _leaving) return;
+        if (_mySubmitted || State != MatchState.MapEdit || _leaving) return;
+        _drawDeadline = -1f;
         _mySubmitted = true;
         _data.MyMap = map;
         _data.MyParTime = Editor != null ? Editor.VerifiedParTime : _data.MyParTime;
@@ -348,12 +541,13 @@ public class GameFlow : MonoBehaviour
         _transitioning = true;
         SetState(MatchState.ExchangePlay);
         SetWaitText("양쪽 맵 준비 완료 — 상대의 맵을 플레이합니다");
-        if (Editor != null) { Editor.Completed -= OnMyMapCompleted; Editor = null; }
+        if (Editor != null) { Editor.Completed -= OnMyMapCompleted; Editor.VerificationChanged -= OnEditorVerification; Editor = null; }
         var me = SceneManager.GetSceneByName(SceneMapEditor);
         if (me.isLoaded) { var un = SceneManager.UnloadSceneAsync(me); while (!un.isDone) yield return null; }
         if (State == MatchState.Aborted || _leaving) { _transitioning = false; yield break; }
         ShowPanel(null);
         if (_roomBar != null) _roomBar.SetActive(false);   // 플레이 중에는 HUD 의 기권 버튼만
+        ShowVowInfo(false);
         _pendingLoad = SceneManager.LoadSceneAsync(ScenePlay, LoadSceneMode.Additive);
         while (!_pendingLoad.isDone) yield return null;
         _pendingLoad = null;
@@ -398,8 +592,8 @@ public class GameFlow : MonoBehaviour
             : "";
         _resultBody.text =
             $"라운드 {Round}\n\n" +
-            $"{_data.MyNickname} (나) — {_data.OpponentNickname}의 맵: {Ranking.RecordText(_data.MyResult, s)}   (맵 패타임 {_data.OpponentParTime:0.00}s)\n" +
-            $"{_data.OpponentNickname} — {_data.MyNickname}의 맵: {Ranking.RecordText(_data.OpponentResult, s)}   (맵 패타임 {_data.MyParTime:0.00}s)" + par;
+            $"{_data.MyNickname} (나) — {_data.OpponentNickname}의 맵: {Ranking.RecordText(_data.MyResult, s)}   (맵 패타임 {_data.OpponentParTime:0.00}s)   뜻: {VowCatalog.NamesOf(_data.MyVows)}\n" +
+            $"{_data.OpponentNickname} — {_data.MyNickname}의 맵: {Ranking.RecordText(_data.OpponentResult, s)}   (맵 패타임 {_data.MyParTime:0.00}s)   뜻: {VowCatalog.NamesOf(_data.OpponentVows)}" + par;
         _nextRoundBtn.gameObject.SetActive(true);
         _nextRoundBtn.interactable = true;
         _nextRoundBtn.GetComponentInChildren<Text>().text = "다음 라운드 (같은 방)";
@@ -417,10 +611,9 @@ public class GameFlow : MonoBehaviour
         Round++;
         ResetRound();
         _net.ResetForNextRound();
-        ShowPanel(null);
-        Debug.Log($"[GameFlow] 라운드 {Round} 시작 (같은 방)");
+        Debug.Log($"[GameFlow] 라운드 {Round} 시작 (같은 방) — 뜻 선택부터");
         _editorLoadStarted = true;
-        StartCoroutine(LoadMapEditor());
+        StartVowSelect();
     }
 
     /// <summary>한 라운드의 진행 플래그·기록 초기화. 세션·상대 정보·방 설정은 유지.</summary>
@@ -428,9 +621,14 @@ public class GameFlow : MonoBehaviour
     {
         _mySubmitted = _opponentMapReceived = _myResultSent = _opponentResultReceived = false;
         _nextRoundMine = _nextRoundTheirs = false;
+        _forfeitMine = _forfeitTheirs = _forfeitShown = false;
+        _myVowsConfirmed = _opponentVowsReceived = false;
+        _vowPicks.Clear();
+        _data.MyVows.Clear(); _data.OpponentVows.Clear();
+        _drawDeadline = -1f;
         _editorLoadStarted = false;
         _transitioning = false;
-        if (Editor != null) { Editor.Completed -= OnMyMapCompleted; Editor = null; }
+        if (Editor != null) { Editor.Completed -= OnMyMapCompleted; Editor.VerificationChanged -= OnEditorVerification; Editor = null; }
         _data.MyMap = null; _data.OpponentMap = null;
         _data.MyParTime = 0f; _data.OpponentParTime = 0f;
         _data.MyResult = null; _data.OpponentResult = null;
@@ -456,6 +654,7 @@ public class GameFlow : MonoBehaviour
         var pl = SceneManager.GetSceneByName(ScenePlay);
         if (pl.isLoaded) { var un = SceneManager.UnloadSceneAsync(pl); while (!un.isDone) yield return null; }
         if (_roomBar != null) _roomBar.SetActive(false);
+        ShowVowInfo(false);
         SetBootCamera(true);
     }
 
@@ -503,11 +702,31 @@ public class GameFlow : MonoBehaviour
         _waitPanel = RuntimeUI.Panel(root, new Vector2(0.2f, 0.40f), new Vector2(0.8f, 0.60f), new Color(0.05f, 0.05f, 0.08f, 0.92f)).gameObject;
         _waitText = RuntimeUI.Label(_waitPanel.transform, new Vector2(0.03f, 0f), new Vector2(0.97f, 1f), "", 30, TextAnchor.MiddleCenter, Color.white);
 
-        // ---- 방 정보 바 (에디터 화면 위, 우상단) — 라운드·방 코드·상대 + 방 나가기
-        _roomBar = RuntimeUI.Panel(root, new Vector2(0.60f, 0.93f), new Vector2(1f, 1f), new Color(0.05f, 0.05f, 0.08f, 0.85f)).gameObject;
-        _roomBarText = RuntimeUI.Label(_roomBar.transform, new Vector2(0.02f, 0f), new Vector2(0.72f, 1f), "", 20, TextAnchor.MiddleLeft, new Color(0.85f, 0.85f, 0.9f));
-        _roomBarLeaveBtn = RuntimeUI.Button(_roomBar.transform, new Vector2(0.74f, 0.12f), new Vector2(0.98f, 0.88f), "방 나가기", LeaveRoom, new Color(0.6f, 0.3f, 0.3f), 18);
+        // ---- 방 나가기 (에디터 화면 위, 우상단 맨 위 띠) — MapEditorHud 의 타이머 패널(위에서 37px 아래부터)과 겹치지 않게 그 위에 둔다.
+        //      검증 플레이 중에는 PlaySession HUD 가 우상단을 쓰므로 숨긴다 (OnEditorVerification)
+        _roomBar = new GameObject("RoomBar", typeof(RectTransform));
+        var rbRt = _roomBar.GetComponent<RectTransform>();
+        rbRt.SetParent(root, false);
+        rbRt.anchorMin = new Vector2(0.885f, 0.966f); rbRt.anchorMax = new Vector2(0.99f, 0.997f);
+        rbRt.offsetMin = rbRt.offsetMax = Vector2.zero;
+        _roomBarLeaveBtn = RuntimeUI.Button(_roomBar.transform, Vector2.zero, Vector2.one, "방 나가기", LeaveRoom, new Color(0.6f, 0.3f, 0.3f, 0.9f), 16);
+        _roomBarText = null;
         _roomBar.SetActive(false);
+
+        // ---- 뜻 선택 (Docs/204 2.1 뜻 선택 카드)
+        _vowPanel = RuntimeUI.Panel(root, Vector2.zero, Vector2.one, new Color(0.10f, 0.11f, 0.14f)).gameObject;
+        var vp = _vowPanel.transform;
+        _vowTitle = RuntimeUI.Label(vp, new Vector2(0f, 0.82f), new Vector2(1f, 0.94f), "", 48, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+        _vowHint = RuntimeUI.Label(vp, new Vector2(0.1f, 0.74f), new Vector2(0.9f, 0.82f), "", 22, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.55f));
+        _vowCardRoot = RuntimeUI.Rect("VowCards", vp, new Vector2(0f, 0.30f), new Vector2(1f, 0.70f), 0f);
+        _vowConfirmBtn = RuntimeUI.Button(vp, new Vector2(0.38f, 0.14f), new Vector2(0.62f, 0.24f), "확정", () => ConfirmVows(), new Color(0.20f, 0.65f, 0.40f), 30);
+        RuntimeUI.Button(vp, new Vector2(0.80f, 0.05f), new Vector2(0.95f, 0.11f), "방 나가기", LeaveRoom, new Color(0.6f, 0.3f, 0.3f), 20);
+
+        // ---- 에디터 왼쪽 여백: 상대의 뜻 안내 (HUD 의 종이 영역 왼쪽 240px 여백 안)
+        _vowInfoPanel = RuntimeUI.Panel(root, new Vector2(0.006f, 0.45f), new Vector2(0.118f, 0.80f), new Color(0.05f, 0.05f, 0.08f, 0.85f)).gameObject;
+        _vowInfoText = RuntimeUI.Label(_vowInfoPanel.transform, new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.96f), "", 18, TextAnchor.UpperCenter, new Color(0.9f, 0.9f, 0.95f));
+        _vowInfoText.supportRichText = true;
+        _vowInfoPanel.SetActive(false);
 
         // ---- 결과 / 무효
         _resultPanel = RuntimeUI.Panel(root, Vector2.zero, Vector2.one, new Color(0.10f, 0.11f, 0.14f)).gameObject;
@@ -530,13 +749,12 @@ public class GameFlow : MonoBehaviour
         _lobbyPanel.SetActive(panel == _lobbyPanel);
         _waitPanel.SetActive(panel == _waitPanel);
         _resultPanel.SetActive(panel == _resultPanel);
+        if (_vowPanel != null) _vowPanel.SetActive(panel == _vowPanel);
     }
 
-    void ShowRoomBar(string text)
+    void SetRoomBarVisible(bool visible)
     {
-        if (_roomBar == null) return;
-        _roomBarText.text = text;
-        _roomBar.SetActive(true);
+        if (_roomBar != null) _roomBar.SetActive(visible);
     }
 
     void SetLobbyStatus(string s) { if (_lobbyStatus != null) _lobbyStatus.text = s; }

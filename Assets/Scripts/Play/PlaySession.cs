@@ -57,12 +57,16 @@ public class PlaySession : MonoBehaviour
     const float FallY = -3f;
     const float FallMargin = 3f;
 
-    public static PlaySession Begin(MapData map, string title, Transform parent = null)
+    /// <summary>이 세션에 적용된 뜻 (검증 = 상대 뜻, 교환 = 내 뜻)</summary>
+    public System.Collections.Generic.List<VowId> Vows { get; private set; } = new System.Collections.Generic.List<VowId>();
+
+    public static PlaySession Begin(MapData map, string title, Transform parent = null, System.Collections.Generic.IList<VowId> vows = null)
     {
         var go = new GameObject("PlaySession");
         if (parent != null) go.transform.SetParent(parent, false);
         var s = go.AddComponent<PlaySession>();
         s.Title = title;
+        if (vows != null) s.Vows.AddRange(vows);
         s.Setup(map);
         return s;
     }
@@ -85,6 +89,8 @@ public class PlaySession : MonoBehaviour
         else Debug.LogWarning("[PlaySession] 골이 없는 맵 — 클리어 판정 불가");
 
         Player = PlayerController.Spawn(map.StartPos, transform);
+        VowCatalog.Apply(Vows, Player, this);   // 뜻은 스폰 직후 1회 적용 — 파라미터만 바꾸므로 리스폰에도 유지된다
+        if (Vows.Count > 0) Debug.Log("[PlaySession] 뜻 적용: " + VowCatalog.NamesOf(Vows));
         BuildHud();
     }
 
@@ -208,7 +214,8 @@ public class PlaySession : MonoBehaviour
         string time = TimeLimit > 0f ? $"⏱ 남은 {Mathf.Max(0f, TimeLimit - Elapsed):0.0}s" : $"⏱ {Elapsed:0.0}s";
         string tries = AttemptLimit > 0 ? $"시도 {Attempts}/{AttemptLimit}" : $"시도 {Attempts}";
         string esc = AbortMeansGiveUp ? "ESC 기권" : "ESC 에디터로";
-        _hudText.text = $"{Title}   {time}   {tries}   |   이동 A/D·←/→   점프 W·↑ (길게 누르면 높이)   빠른 낙하 S·↓   R 리스폰   {esc}" +
+        string vow = Vows.Count > 0 ? "   |   " + VowCatalog.HudLine(Vows, Player, this) : "";
+        _hudText.text = $"{Title}   {time}   {tries}{vow}   |   이동 A/D·←/→   점프 W·↑   S·↓ 빠른 낙하   R 리스폰   {esc}" +
                         (IsFinished ? (AbortMeansGiveUp ? "   |   종료 — 상대 결과 대기" : "   |   클리어 — 잠시 후 에디터로 돌아갑니다") : "");
     }
 }

@@ -25,13 +25,17 @@ public class PlayerController : MonoBehaviour
     [Header("이동")]
     public float MoveSpeed = 5f;
     [Tooltip("0 → 최고 속도까지 걸리는 시간 (지상)")] public float GroundAccelTime = 0.05f;
+    [Tooltip("최고 속도 → 0 까지 걸리는 시간 (지상). 0 = 즉시 정지")] public float GroundDecelTime = 0f;
     [Tooltip("0 → 최고 속도까지 걸리는 시간 (공중)")] public float AirAccelTime = 0.1f;
+    [Tooltip("false 면 공중에서 수평 속도를 바꿀 수 없다 (뜻: 공중 제어 금지)")] public bool AirControl = true;
 
     [Header("점프")]
     public float JumpSpeed = 10f;                 // 최대 높이 ≈ 2.5u (상승 중력 2.0 기준)
     [Tooltip("키를 떼면 상승 속도에 곱함 → 최소 높이 ≈ 최대의 1/4")] public float JumpCutMultiplier = 0.5f;
     public float CoyoteTime = 0.1f;
     public float JumpBufferTime = 0.1f;
+    [Tooltip("시도당 점프 상한. 0 = 무제한 (뜻: 점프 횟수 제한). 리스폰 시 초기화")] public int MaxJumpsPerAttempt = 0;
+    [Tooltip("착지 후 이 시간 동안 점프 불가. 0 = 없음 (뜻: 점프 쿨다운)")] public float JumpCooldownAfterLanding = 0f;
 
     [Header("중력")]
     public float RiseGravity = 2.0f;
@@ -71,6 +75,9 @@ public class PlayerController : MonoBehaviour
     public bool JumpHeld { get; private set; }
     public bool FastFallHeld { get; private set; }
     public int JumpCount { get; private set; }
+    public float JumpCooldownRemaining => Mathf.Max(0f, _cooldownUntil - Time.fixedTime);
+    public bool JumpsExhausted => MaxJumpsPerAttempt > 0 && JumpCount >= MaxJumpsPerAttempt;
+    public Vector2 CurrentBodySize => _bodySize;
     public Rigidbody2D Body => _rb;
 
     public event Action Jumped;
@@ -91,6 +98,8 @@ public class PlayerController : MonoBehaviour
     float _apexTimer;
     bool _wasGrounded;
     float _lastFallSpeed;
+    float _cooldownUntil = float.NegativeInfinity;
+    Vector2 _bodySize = BodySize;
 
     // ---- 비주얼
     Transform _visual;
@@ -204,12 +213,17 @@ public class PlayerController : MonoBehaviour
         if (IsGrounded) { _lastGroundedTime = now; _jumping = false; _jumpCut = false; _apexTimer = 0f; }
 
         // 착지 감지 (피드백)
-        if (IsGrounded && !_wasGrounded && _lastFallSpeed > 2f) OnLanded(_lastFallSpeed);
+        if (IsGrounded && !_wasGrounded)
+        {
+            if (JumpCooldownAfterLanding > 0f) _cooldownUntil = now + JumpCooldownAfterLanding;
+            if (_lastFallSpeed > 2f) OnLanded(_lastFallSpeed);
+        }
         _wasGrounded = IsGrounded;
 
         bool jumpBuffered = Time.time - _jumpPressedTime <= JumpBufferTime;
-        bool canJump = IsGrounded || now - _lastGroundedTime <= CoyoteTime;
+        bool canJump = (IsGrounded || now - _lastGroundedTime <= CoyoteTime) && !JumpsExhausted && now >= _cooldownUntil;
         bool doJump = jumpBuffered && canJump;
+        if (jumpBuffered && !canJump && (JumpsExhausted || now < _cooldownUntil)) _jumpPressedTime = float.NegativeInfinity;   // 막힌 입력은 버퍼에 남기지 않는다
 
         var v = _rb.linearVelocity;
         float target = MoveInput * MoveSpeed;
@@ -219,7 +233,11 @@ public class PlayerController : MonoBehaviour
         if (IsGrounded && !doJump)
         {
             var tangent = new Vector2(GroundNormal.y, -GroundNormal.x);        // 노멀에 수직, 오른쪽 방향
-            if (idle) v = Vector2.zero;                                          // 정지 즉시 (마찰 재질이 경사에서 붙잡음)
+            if (idle)
+            {
+                if (GroundDecelTime <= 0f) v = Vector2.zero;                                        // 정지 즉시 (마찰 재질이 경사에서 붙잡음)
+                else { float along = Vector2.Dot(v, tangent); along = Mathf.MoveTowards(along, 0f, (MoveSpeed / GroundDecelTime) * dt); v = tangent * along; }
+            }
             else
             {
                 float along = Vector2.Dot(v, tangent);
@@ -229,7 +247,7 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            v.x = Accelerate(v.x, target, AirAccelTime, dt);                     // 공중: 수평만 제어
+            if (AirControl) v.x = Accelerate(v.x, target, AirAccelTime, dt);   // 공중: 수평만 제어 (공중 제어 금지 뜻이면 유지)
         }
 
         // ---- 점프
@@ -419,12 +437,13 @@ public class PlayerController : MonoBehaviour
         transform.position = new Vector3(position.x, position.y, 0f);
         _rb.gravityScale = RiseGravity;
         JumpCount = 0;
+        _cooldownUntil = float.NegativeInfinity;
         _jumpPressedTime = float.NegativeInfinity;
         _lastGroundedTime = float.NegativeInfinity;
         _jumping = false; _jumpCut = false; _apexTimer = 0f;
         _lastFallSpeed = 0f; _wasGrounded = false;
         _squash = Vector2.one; _squashTimer = 0f;
-        if (_visual != null) { _visual.localScale = new Vector3(BodySize.x, BodySize.y, 1f); _visual.localPosition = Vector3.zero; }
+        if (_visual != null) { _visual.localScale = new Vector3(_bodySize.x, _bodySize.y, 1f); _visual.localPosition = Vector3.zero; }
         if (_visualSr != null) _visualSr.color = BodyColor;
     }
 
@@ -437,6 +456,25 @@ public class PlayerController : MonoBehaviour
     }
 
     public void Unfreeze() => InputEnabled = true;
+
+    /// <summary>몸집 배율 (뜻: 큰 몸집). 콜라이더·비주얼을 함께 키우고 발이 같은 높이에 오도록 위로 올린다.</summary>
+    public void ApplyBodyScale(float scale)
+    {
+        scale = Mathf.Max(0.25f, scale);
+        var before = _bodySize;
+        _bodySize = BodySize * scale;
+        _col.size = _bodySize;
+        if (_visual != null) _visual.localScale = new Vector3(_bodySize.x, _bodySize.y, 1f);
+        float lift = (_bodySize.y - before.y) * 0.5f + 0.02f;
+        if (lift > 0f) { _rb.position += new Vector2(0f, lift); transform.position += new Vector3(0f, lift, 0f); }
+    }
+
+    /// <summary>IdleFriction 등 재질 파라미터를 바꾼 뒤 호출 (뜻: 미끄러운 발).</summary>
+    public void RefreshMaterials()
+    {
+        _matIdle.friction = IdleFriction;
+        _col.sharedMaterial = _idleMaterialApplied ? _matIdle : _matMoving;
+    }
 
     /// <summary>사망 연출 (PlaySession 이 리스폰 전에 호출): 색 변화 + 먼지 + 효과음.</summary>
     public void PlayDeathFeedback()
@@ -473,12 +511,12 @@ public class PlayerController : MonoBehaviour
                 _squashTimer -= Time.deltaTime;
                 float t = 1f - Mathf.Clamp01(_squashTimer / SquashDuration);   // 0 → 1
                 var s = Vector2.Lerp(_squash, Vector2.one, t);
-                _visual.localScale = new Vector3(BodySize.x * s.x, BodySize.y * s.y, 1f);
-                _visual.localPosition = new Vector3(0f, (BodySize.y * s.y - BodySize.y) * 0.5f, 0f);   // 발 기준으로 늘고 줄게
+                _visual.localScale = new Vector3(_bodySize.x * s.x, _bodySize.y * s.y, 1f);
+                _visual.localPosition = new Vector3(0f, (_bodySize.y * s.y - _bodySize.y) * 0.5f, 0f);   // 발 기준으로 늘고 줄게
             }
-            else if (_visual.localScale.y != BodySize.y)
+            else if (_visual.localScale.y != _bodySize.y)
             {
-                _visual.localScale = new Vector3(BodySize.x, BodySize.y, 1f);
+                _visual.localScale = new Vector3(_bodySize.x, _bodySize.y, 1f);
                 _visual.localPosition = Vector3.zero;
             }
         }

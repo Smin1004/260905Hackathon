@@ -49,7 +49,7 @@ public class PlayBootstrap : MonoBehaviour
         }
         else title = $"교환 플레이 — {data.OpponentNickname}의 맵";
 
-        Session = PlaySession.Begin(map, title, transform);
+        Session = PlaySession.Begin(map, title, transform, data.MyVows);   // 교환 플레이 = 자기 뜻 (Docs/100 4.2)
         Session.TimeLimit = data.Settings.PlayTimeLimit;
         Session.AttemptLimit = data.Settings.AttemptLimit;
         Session.AbortMeansGiveUp = true;

@@ -53,6 +53,9 @@ public class MapEditorController : MonoBehaviour
     /// <summary>제출 후 잠금 — 입력·UI 차단 (GameFlow 가 상대 대기 중 설정). Docs/100 6장 "제출 후 수정 불가".</summary>
     public bool Locked { get; private set; }
 
+    /// <summary>검증 플레이에 적용할 뜻. null 이면 MatchData.OpponentVows (단독 테스트 시 직접 지정 가능)</summary>
+    public System.Collections.Generic.List<VowId> VerificationVows;
+
     /// <summary>맵 내용·도구·모드가 바뀔 때 (UI 갱신용)</summary>
     public event Action Changed;
     public event Action<string> StatusChanged;
@@ -454,7 +457,8 @@ public class MapEditorController : MonoBehaviour
         _preview.positionCount = 0;
         SetUiVisible(false);
 
-        _session = PlaySession.Begin(Map.Clone(), "검증 플레이", transform);
+        var vows = VerificationVows ?? MatchData.Instance.OpponentVows;   // 검증은 상대의 뜻으로 (Docs/100 6장)
+        _session = PlaySession.Begin(Map.Clone(), vows != null && vows.Count > 0 ? "검증 플레이 — 상대 뜻: " + VowCatalog.NamesOf(vows) : "검증 플레이", transform, vows);
         _session.Completed += OnVerificationCompleted;
         _session.Aborted += OnVerificationAborted;
 

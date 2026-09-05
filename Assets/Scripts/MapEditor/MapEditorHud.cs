@@ -12,7 +12,7 @@ using UnityEngine.UI;
 ///    맵 사각형(0,0)~(30,15)을 화면에 투영해 종이 프레임을 그 위에 덮는다 → 해상도가 바뀌어도 UI 와 맵이 어긋나지 않는다.
 ///
 /// 로직은 전부 MapEditorController 에 있고 여기서는 호출·표시만 한다. 씬에 이 프리팹이 있으면 컨트롤러가 찾아서 Bind 한다.
-/// 그리기 타이머는 방 설정(DrawTimeLimit)을 표시만 한다 — 만료 처리(골 배치만 허용 상태)는 미구현 (Docs/203 3장).
+/// 그리기 타이머: 멀티 매치에서는 GameFlow.DrawTimeRemaining 을 표시하고, 만료 시 GameFlow 가 제출 실패(패배)로 처리한다. 단독 실행 시에는 표시만.
 /// </summary>
 public class MapEditorHud : MonoBehaviour
 {
@@ -259,7 +259,11 @@ public class MapEditorHud : MonoBehaviour
 
     void UpdateTimer(bool force)
     {
-        float remaining = _drawLimit > 0 ? Mathf.Max(0f, _drawLimit - (Time.time - _drawStart)) : 0f;
+        // 멀티 매치 중에는 GameFlow 가 라운드 마감(만료 시 패배 처리)을 관리하므로 그 시계를 그대로 표시한다. 단독 실행 시에는 로컬 시계
+        var flow = GameFlow.Instance;
+        float remaining = (flow != null && flow.DrawTimeRemaining >= 0f)
+            ? flow.DrawTimeRemaining
+            : (_drawLimit > 0 ? Mathf.Max(0f, _drawLimit - (Time.time - _drawStart)) : 0f);
         int sec = Mathf.CeilToInt(remaining);
         if (timerNumber != null) timerNumber.text = sec.ToString();
         if (timerRemaining != null) timerRemaining.text = string.Format("{0}:{1:00}", sec / 60, sec % 60);
