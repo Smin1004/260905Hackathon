@@ -45,8 +45,11 @@ public class MapEditorController : MonoBehaviour
     public float VerifiedParTime { get; private set; }
     public bool InVerification => _session != null;
     public PlaySession Session => _session;
-    public bool CanVerify => Map.HasGoal && Map.Strokes.Count > 0 && !InVerification;
-    public bool CanComplete => IsVerified && Map.HasGoal && Map.Strokes.Count > 0 && !InVerification;
+    public bool CanVerify => Map.HasGoal && Map.Strokes.Count > 0 && !InVerification && !Locked;
+    public bool CanComplete => IsVerified && Map.HasGoal && Map.Strokes.Count > 0 && !InVerification && !Locked;
+
+    /// <summary>제출 후 잠금 — 입력·UI 차단 (GameFlow 가 상대 대기 중 설정). Docs/100 6장 "제출 후 수정 불가".</summary>
+    public bool Locked { get; private set; }
 
     /// <summary>맵 내용·도구·모드가 바뀔 때 (UI 갱신용)</summary>
     public event Action Changed;
@@ -86,6 +89,8 @@ public class MapEditorController : MonoBehaviour
             var camGo = new GameObject("Main Camera (runtime)");
             camGo.tag = "MainCamera";
             targetCamera = camGo.AddComponent<Camera>();
+            if (gameObject.scene.IsValid() && camGo.scene != gameObject.scene)
+                UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(camGo, gameObject.scene);
         }
         targetCamera.backgroundColor = new Color(0.16f, 0.17f, 0.2f);
         targetCamera.clearFlags = CameraClearFlags.SolidColor;
@@ -115,10 +120,35 @@ public class MapEditorController : MonoBehaviour
     void Update()
     {
         if (!Mathf.Approximately(_lastAspect, targetCamera.aspect)) FitCamera();
-        if (InVerification) return;   // 플레이 중에는 세션이 입력을 가진다 (ESC 로 복귀)
+        if (InVerification || Locked) return;   // 플레이 중에는 세션이 입력을 가진다 (ESC 로 복귀) / 제출 후에는 편집 불가
         HandleShortcuts();
         HandlePointer();
     }
+
+    /// <summary>제출 후 편집 잠금. UI 를 숨기고 입력을 막는다 (해제 시 복원).</summary>
+    public void SetLocked(bool locked)
+    {
+        if (Locked == locked) return;
+        if (locked) { if (_drawing) EndStroke(); if (_erasing) EndErase(); }
+        Locked = locked;
+        _eraserCursor.gameObject.SetActive(false);
+        _preview.positionCount = 0;
+        if (_ui != null) _ui.SetVisible(!locked && !InVerification);
+        Changed?.Invoke();
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>자동 테스트 전용: 검증 플레이 없이 검증 성공 상태로 만든다. 릴리즈 빌드에는 포함되지 않는다.</summary>
+    public void DebugForceVerified(float parTime)
+    {
+        if (!Map.HasGoal || Map.Strokes.Count == 0) return;
+        IsVerified = true;
+        VerifiedParTime = parTime;
+        MatchData.Instance.MyParTime = parTime;
+        SetStatus($"[디버그] 검증 강제 성공 — 패타임 {parTime:0.00}s");
+        Changed?.Invoke();
+    }
+#endif
 
     void FitCamera()
     {

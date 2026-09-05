@@ -500,6 +500,8 @@ public class PlayerController : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             var sr = RuntimeSprites.MakeSquare("Dust", null, at, Vector2.one * UnityEngine.Random.Range(0.08f, 0.16f), new Color(0.9f, 0.9f, 0.85f, 0.8f), 19);
+            if (gameObject.scene.IsValid() && sr.gameObject.scene != gameObject.scene)
+                UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(sr.gameObject, gameObject.scene);
             float ang = UnityEngine.Random.Range(20f, 160f) * Mathf.Deg2Rad;
             var v = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang) * 0.6f) * speed * UnityEngine.Random.Range(0.5f, 1f);
             _dust.Add(new Dust { T = sr.transform, V = v, Life = UnityEngine.Random.Range(0.25f, 0.4f), Sr = sr });

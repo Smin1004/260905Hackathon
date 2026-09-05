@@ -113,10 +113,12 @@ class RoomSettings {
 
 ```
 Assets/
-├── Scenes/        Boot, Lobby, MapEditor, Play, Result
+├── Scenes/        Boot(로비·결과 UI 포함), MapEditor, Play  — Lobby/Result 는 별도 씬 대신 Boot 의 런타임 UI 로 구현됨 (필요 시 분리)
 ├── Scripts/
 │   ├── Common/    (MatchData, RoomSettings 등 공유 타입 — 201 관리)
-│   ├── Lobby/     ├── MapEditor/ ├── Play/ ├── Result/ ├── Network/
+│   ├── Boot/      (GameFlow — 매치 FSM·로비·결과 UI. Lobby/Result 씬 역할을 현재 Boot 런타임 UI 가 겸함)
+│   ├── MapEditor/ ├── Play/ ├── Network/ (NetService)
+│   ├── Debug/     (AutoPilot — 개발 빌드 전용 자동 테스트)
 │   └── NetTest/   (멀티 검증 전용 — 게임 코드에서 참조 금지)
 ├── Prefabs/       기능별 하위 폴더, 소유자별 충돌 최소화
 ├── Art/  UI/  Audio/

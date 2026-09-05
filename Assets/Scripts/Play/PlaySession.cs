@@ -10,6 +10,10 @@ public class PlayResult
     public float ClearTime;
     /// <summary>1 + R키 수동 리스폰 횟수 (낙하 자동 리스폰은 미소모) — Docs/206 1장</summary>
     public int Attempts;
+    /// <summary>미클리어 (기권 / 시도 제한 소진 / 시간 만료)</summary>
+    public bool GaveUp;
+
+    public PlayerRecord ToRecord() => new PlayerRecord { Cleared = Cleared, ClearTime = ClearTime, AttemptsUsed = Attempts, GaveUp = GaveUp };
 }
 
 /// <summary>
@@ -21,6 +25,13 @@ public class PlayResult
 public class PlaySession : MonoBehaviour
 {
     public string Title = "검증 플레이";
+    /// <summary>0 = 제한 없음. 초과 시 미클리어(GaveUp)로 종료 — 방 설정 PlayTimeLimit (Docs/100 7.1)</summary>
+    public float TimeLimit = 0f;
+    /// <summary>0 = 무한. R키 시도가 이 값을 넘으면 미클리어로 종료 — 방 설정 AttemptLimit</summary>
+    public int AttemptLimit = 0;
+    /// <summary>true 면 ESC/버튼이 "기권"(Completed, GaveUp=true) 으로 처리된다 (교환 플레이). false 면 Aborted (검증 플레이: 에디터 복귀)</summary>
+    public bool AbortMeansGiveUp = false;
+    public string AbortLabel = "에디터로 돌아가기 (ESC)";
     public MapData Map { get; private set; }
     public PlayerController Player { get; private set; }
     public MapLoader Loader { get; private set; }
@@ -29,13 +40,14 @@ public class PlaySession : MonoBehaviour
     public bool IsFinished { get; private set; }
     public bool Cleared { get; private set; }
 
-    /// <summary>골 도달.</summary>
+    /// <summary>플레이 종료 — 골 도달(Cleared) 또는 기권·시간 만료·시도 소진(GaveUp).</summary>
     public event Action<PlayResult> Completed;
     /// <summary>플레이어가 중단 (ESC / 버튼).</summary>
     public event Action Aborted;
 
     Canvas _hud;
     Text _hudText, _resultText;
+    Button _abortBtn;
     bool _ending;
     bool _respawning;
 
@@ -53,6 +65,12 @@ public class PlaySession : MonoBehaviour
         s.Title = title;
         s.Setup(map);
         return s;
+    }
+
+    /// <summary>Begin 이후에 AbortLabel 을 바꾼 경우 HUD 버튼에 반영.</summary>
+    public void RefreshAbortLabel()
+    {
+        if (_abortBtn != null) { var t = _abortBtn.GetComponentInChildren<Text>(); if (t != null) t.text = AbortLabel; }
     }
 
     void Setup(MapData map)
@@ -77,6 +95,7 @@ public class PlaySession : MonoBehaviour
         if (IsFinished) return;
 
         Elapsed += Time.deltaTime;
+        if (TimeLimit > 0f && Elapsed >= TimeLimit) { Elapsed = TimeLimit; Finish(false, true, "시간 만료"); return; }
         if (kb != null && kb.rKey.wasPressedThisFrame) Respawn(countsAsAttempt: true);
         CheckOutOfBounds();
         UpdateHud();
@@ -92,7 +111,12 @@ public class PlaySession : MonoBehaviour
     public void Respawn(bool countsAsAttempt)
     {
         if (IsFinished || _respawning) return;
-        if (countsAsAttempt) Attempts++;
+        if (countsAsAttempt)
+        {
+            // 마지막 시도 중 R → 더 이상 시도가 없으므로 미클리어. 기록되는 Attempts 는 상한을 넘지 않는다
+            if (AttemptLimit > 0 && Attempts >= AttemptLimit) { Finish(false, true, "시도 소진"); return; }
+            Attempts++;
+        }
         StartCoroutine(RespawnRoutine());
     }
 
@@ -115,21 +139,33 @@ public class PlaySession : MonoBehaviour
 
     void OnGoalReached(Collider2D other)
     {
+        Finish(true, false, null);
+    }
+
+    void Finish(bool cleared, bool gaveUp, string reason)
+    {
         if (IsFinished) return;
         IsFinished = true;
-        Cleared = true;
-        Player.Freeze();
+        Cleared = cleared;
+        if (Player != null) Player.Freeze();
         if (_resultText != null)
         {
             _resultText.gameObject.SetActive(true);
-            _resultText.text = $"클리어!  {Elapsed:0.00}초  (시도 {Attempts})";
+            _resultText.color = cleared ? new Color(0.4f, 1f, 0.5f) : new Color(1f, 0.5f, 0.4f);
+            _resultText.text = cleared ? $"클리어!  {Elapsed:0.00}초  (시도 {Attempts})" : $"미클리어 — {reason}  (시도 {Attempts})";
         }
         UpdateHud();
-        Completed?.Invoke(new PlayResult { Cleared = true, ClearTime = Elapsed, Attempts = Attempts });
+        Completed?.Invoke(new PlayResult { Cleared = cleared, ClearTime = Elapsed, Attempts = Attempts, GaveUp = gaveUp });
     }
 
+    /// <summary>ESC/버튼. 검증 모드 → Aborted(에디터 복귀). 교환 모드(AbortMeansGiveUp) → 기권으로 종료.</summary>
     public void Abort()
     {
+        if (AbortMeansGiveUp)
+        {
+            if (!IsFinished) Finish(false, true, "기권");
+            return;
+        }
         if (_ending) return;
         _ending = true;
         Aborted?.Invoke();
@@ -153,12 +189,12 @@ public class PlaySession : MonoBehaviour
 
     void BuildHud()
     {
-        _hud = RuntimeUI.Canvas("Play HUD (runtime)", 200);
+        _hud = RuntimeUI.Canvas("Play HUD (runtime)", 200, gameObject);
         var root = _hud.transform;
 
         var top = RuntimeUI.Panel(root, new Vector2(0f, 0.92f), new Vector2(1f, 1f), new Color(0.05f, 0.05f, 0.08f, 0.85f));
         _hudText = RuntimeUI.Label(top, new Vector2(0.01f, 0f), new Vector2(0.78f, 1f), "", 24, TextAnchor.MiddleLeft, Color.white);
-        RuntimeUI.Button(top, new Vector2(0.80f, 0.12f), new Vector2(0.99f, 0.88f), "에디터로 돌아가기 (ESC)", Abort, new Color(0.75f, 0.35f, 0.3f));
+        _abortBtn = RuntimeUI.Button(top, new Vector2(0.80f, 0.12f), new Vector2(0.99f, 0.88f), AbortLabel, Abort, new Color(0.75f, 0.35f, 0.3f));
 
         _resultText = RuntimeUI.Label(root, new Vector2(0.2f, 0.42f), new Vector2(0.8f, 0.58f), "", 64, TextAnchor.MiddleCenter, new Color(0.4f, 1f, 0.5f), FontStyle.Bold);
         _resultText.gameObject.SetActive(false);
@@ -169,7 +205,10 @@ public class PlaySession : MonoBehaviour
     void UpdateHud()
     {
         if (_hudText == null) return;
-        _hudText.text = $"{Title}   ⏱ {Elapsed:0.0}s   시도 {Attempts}   |   이동 A/D·←/→   점프 W·↑ (길게 누르면 높이)   빠른 낙하 S·↓   R 리스폰   ESC 에디터로" +
-                        (IsFinished ? "   |   클리어 — 잠시 후 에디터로 돌아갑니다" : "");
+        string time = TimeLimit > 0f ? $"⏱ 남은 {Mathf.Max(0f, TimeLimit - Elapsed):0.0}s" : $"⏱ {Elapsed:0.0}s";
+        string tries = AttemptLimit > 0 ? $"시도 {Attempts}/{AttemptLimit}" : $"시도 {Attempts}";
+        string esc = AbortMeansGiveUp ? "ESC 기권" : "ESC 에디터로";
+        _hudText.text = $"{Title}   {time}   {tries}   |   이동 A/D·←/→   점프 W·↑ (길게 누르면 높이)   빠른 낙하 S·↓   R 리스폰   {esc}" +
+                        (IsFinished ? (AbortMeansGiveUp ? "   |   종료 — 상대 결과 대기" : "   |   클리어 — 잠시 후 에디터로 돌아갑니다") : "");
     }
 }

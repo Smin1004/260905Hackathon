@@ -54,7 +54,7 @@ public class MapEditorUI : MonoBehaviour
 
     void Build()
     {
-        _canvas = RuntimeUI.Canvas("Editor UI (runtime)", 100);
+        _canvas = RuntimeUI.Canvas("Editor UI (runtime)", 100, gameObject);
         var root = _canvas.transform;
 
         // ---- 상단 바 (2줄)

@@ -142,14 +142,31 @@ class NetService : MonoBehaviour {
 | 플레이 시간 만료 | 로컬 판단 → `PlayResult`(GaveUp=true) 전송. 양쪽 모두 반드시 결과를 보내므로 Result 전환 보장 |
 | 서비스 초기화 실패 (오프라인 등) | `Init()` 예외 → 로비에 "네트워크 연결 실패" 1문장, 재시도 버튼 |
 
-## 8. 테스트 체크리스트
+## 8. 구현 현황 (2026-09-05)
 
-- [ ] 팀 대표 커밋 후 다른 팀원 PC에서 추가 설정 없이 `Init()` 성공 (프로젝트 연결 공유 확인)
-- [ ] 방 생성 → 코드 표시 → 코드 참가 → 2인 접속 확인 (Multiplayer Play Mode 가상 플레이어로)
+| 파일 | 역할 |
+|---|---|
+| `Scripts/Network/NetService.cs` | 6장 래퍼 구현. `Init`(익명 로그인, 인스턴스별 프로필) → `CreateRoom`/`JoinRoom`(Sessions + Relay, SDK 가 NGO Host/Client 자동 시작) → NGO 시작 대기 후 이름 붙은 메시지 핸들러 등록. 메시지: `CJ_Hello`(닉네임 + 호스트→클라 방 설정), `CJ_MapMeta`(패타임·크기·청크 수), `CJ_MapChunk`(4KB, ReliableFragmentedSequenced), `CJ_PlayResult`. 끊김은 NGO 연결 해제 콜백 + 세션 이벤트 → `MatchAborted` 1회 |
+| `Scripts/Boot/GameFlow.cs` | 4장 FSM. Boot 씬 상주(DontDestroyOnLoad). 로비 UI(닉네임·방 만들기·코드 참가) → Hello 교환 시 MapEditor 애디티브 로드 → 에디터 `Completed` 구독 → 잠금 + `SendMap` → 내 제출 ∧ 상대 맵 수신 시 MapEditor 언로드·Play 로드 → `PlayBootstrap.Finished` 로 결과 전송 → 양쪽 결과 시 `Ranking` 판정 결과 화면. 끊김 → "매치 무효" 화면 |
+| `Scripts/Play/PlayBootstrap.cs` | Play 씬 진입점. `MatchData.OpponentMap` 으로 `PlaySession`(교환 모드: 시간·시도 제한, ESC=기권) 실행. 상대 맵이 없으면 데모 맵 (단독 실행 가능) |
+| `Scripts/Common/Ranking.cs` | 206 계산식 순수 함수 (`EffectiveTime`, `Score`, `Judge`) |
+| `Scripts/Debug/AutoPilot.cs` | 개발 빌드 전용 자동 파일럿. `-autohost` / `-autojoin CODE` 인자로 방 생성·참가, 자동 맵 제작·확정, 교환 플레이 자동 클리어까지 사람 손 없이 진행 → 2 프로세스 종단 테스트용 |
+
+- **Hello 핸드셰이크는 재전송 방식**: NGO 는 핸들러가 등록되기 전에 도착한 이름 붙은 메시지를 버린다. 클라이언트는 SDK 참가 완료 후에야 핸들러를 등록하므로, 접속 직후 호스트가 보낸 Hello 가 유실될 수 있다 (실제 테스트에서 재현). 양쪽은 상대의 Hello 를 받을 때까지 1초마다 Hello 를 다시 보내고, 받은 쪽은 상대가 아직 내 Hello 를 못 받았으면(ack=false) 한 번 답장한다. 30초 안에 교신이 없으면 매치 중단
+- 방 설정은 세션 프로퍼티 대신 **Hello 메시지**로 호스트가 전달한다 (SDK 프로퍼티 API 의존을 줄이기 위해). 3장의 세션 프로퍼티 표는 설계 참고로 남긴다
+- 이름 붙은 메시지는 비조각 전달에서 1264바이트 상한이 있으므로 맵 청크는 반드시 `ReliableFragmentedSequenced` (패키지 소스 확인)
+- 양쪽 제출 완료 판정은 각 클라이언트가 독립적으로 "내 제출 ∧ 상대 맵 수신" 을 계산한다 — 별도 동기화 메시지 없음. 결과 화면도 "내 결과 전송 ∧ 상대 결과 수신" 으로 각자 판단
+- 런타임 생성 UI 는 소유 오브젝트의 씬으로 옮겨(`RuntimeUI.Canvas(owner)`) 애디티브 씬 언로드 시 함께 정리된다
+- 미구현: 뜻 선택 단계(VowSelect — 뜻 시스템 자체가 미구현), 그리기 시간 제한, 방 설정 UI(기본값 고정), 검증 단계 총 상한 `SubmitFailed`, 재접속
+
+## 9. 테스트 체크리스트
+
+- [x] 팀 대표 커밋 후 다른 팀원 PC에서 추가 설정 없이 `Init()` 성공 (프로젝트 연결 공유 확인) — 빌드 클라이언트에서 확인
+- [x] 방 생성 → 코드 표시 → 코드 참가 → 2인 접속 확인 (에디터 호스트 + 개발 빌드 클라이언트)
 - [ ] 세션 프로퍼티 → 참가자 `RoomSettings` 4종 값 일치
 - [ ] `MapData` 청크 분할 전송 왕복 무손실 (60스트로크 × 300점 상한 맵으로)
-- [ ] 상태 전환 전부 양방향 동기화 되는지 (한쪽만 빠른 경우 처리)
-- [ ] 참가자 강제 종료 / 방장 강제 종료 각각 → 상대 화면이 결과(무효)로 전환
+- [x] 상태 전환 전부 양방향 동기화 되는지 (한쪽만 빠른 경우 처리) — 자동 파일럿 2 프로세스로 Lobby→Result 전 구간 통과
+- [~] 참가자 강제 종료 / 방장 강제 종료 각각 → 상대 화면이 결과(무효)로 전환 — 방장이 결과 후 나간 경우 클라이언트가 MatchAborted 수신 확인. 플레이 도중 끊김은 미확인
 - [ ] 다른 네트워크의 PC 2대에서 코드 참가 성공 (시연 리허설)
 
 ---
