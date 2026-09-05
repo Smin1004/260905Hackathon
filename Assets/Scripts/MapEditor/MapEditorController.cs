@@ -23,6 +23,7 @@ public class MapEditorController : MonoBehaviour
 {
     [SerializeField] StrokePalette palette;
     [SerializeField] Camera targetCamera;
+    [Tooltip("씬에 MapEditorHud 프리팹이 없을 때만 쓰는 플레이스홀더 런타임 UI")]
     [SerializeField] bool buildRuntimeUI = true;
 
     public EditorTool Tool { get; private set; } = EditorTool.Pen;
@@ -33,6 +34,7 @@ public class MapEditorController : MonoBehaviour
 
     public MapData Map { get; private set; } = new MapData();
     public StrokePalette Palette => palette;
+    public Camera Camera => targetCamera;
     public bool CanUndo => _undo.Count > 0;
     public bool CanRedo => _redo.Count > 0;
     public bool IsDrawing => _drawing;
@@ -65,7 +67,8 @@ public class MapEditorController : MonoBehaviour
     readonly List<StrokeData> _strokeObjectSources = new List<StrokeData>();
     Transform _strokesRoot;
     CanvasView _view;
-    MapEditorUI _ui;
+    MapEditorUI _ui;      // 플레이스홀더 (HUD 프리팹이 없을 때)
+    MapEditorHud _hud;    // 씬의 HUD 프리팹 (Assets/Prefabs/UI/MapEditorHud.prefab)
     LineRenderer _preview;
     Transform _eraserCursor;
     List<Vector2> _current;
@@ -92,12 +95,14 @@ public class MapEditorController : MonoBehaviour
             if (gameObject.scene.IsValid() && camGo.scene != gameObject.scene)
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(camGo, gameObject.scene);
         }
-        targetCamera.backgroundColor = new Color(0.16f, 0.17f, 0.2f);
+        _hud = FindHudInScene();
+        var theme = _hud != null ? _hud.Theme : null;
+        targetCamera.backgroundColor = theme != null ? theme.Background : new Color(0.16f, 0.17f, 0.2f);
         targetCamera.clearFlags = CameraClearFlags.SolidColor;
         FitCamera();
 
         _view = gameObject.AddComponent<CanvasView>();
-        _view.Build();
+        _view.Build(theme);
 
         _strokesRoot = new GameObject("Strokes").transform;
         _strokesRoot.SetParent(transform, false);
@@ -112,14 +117,15 @@ public class MapEditorController : MonoBehaviour
         _eraserCursor.gameObject.SetActive(false);
 
         EnsureEventSystem();
-        if (buildRuntimeUI) { _ui = gameObject.AddComponent<MapEditorUI>(); _ui.Bind(this); }
+        if (_hud != null) _hud.Bind(this);
+        else if (buildRuntimeUI) { _ui = gameObject.AddComponent<MapEditorUI>(); _ui.Bind(this); }
 
         SetStatus("펜으로 선을 그리세요. 선이 곧 벽입니다. 골을 배치하고 검증 플레이로 클리어하면 완료할 수 있습니다.");
     }
 
     void Update()
     {
-        if (!Mathf.Approximately(_lastAspect, targetCamera.aspect)) FitCamera();
+        if (_hud == null && !Mathf.Approximately(_lastAspect, targetCamera.aspect)) FitCamera();   // HUD 가 있으면 HUD 가 슬롯에 맞춰 호출
         if (InVerification || Locked) return;   // 플레이 중에는 세션이 입력을 가진다 (ESC 로 복귀) / 제출 후에는 편집 불가
         HandleShortcuts();
         HandlePointer();
@@ -133,7 +139,7 @@ public class MapEditorController : MonoBehaviour
         Locked = locked;
         _eraserCursor.gameObject.SetActive(false);
         _preview.positionCount = 0;
-        if (_ui != null) _ui.SetVisible(!locked && !InVerification);
+        SetUiVisible(!locked && !InVerification);
         Changed?.Invoke();
     }
 
@@ -152,8 +158,30 @@ public class MapEditorController : MonoBehaviour
 
     void FitCamera()
     {
+        if (_hud != null) return;   // MapEditorHud.FitCameraToSlot 이 FitCamera(Rect) 로 맞춘다
         CanvasView.FitCamera(targetCamera, MapEditorUI.TopBarFraction, MapEditorUI.BottomBarFraction);
         _lastAspect = targetCamera.aspect;
+    }
+
+    /// <summary>HUD 가 종이 슬롯(뷰포트 비율)을 넘겨 카메라를 맞춘다.</summary>
+    public void FitCamera(Rect viewport, float margin)
+    {
+        CanvasView.FitCamera(targetCamera, viewport, margin);
+        _lastAspect = targetCamera.aspect;
+    }
+
+    void SetUiVisible(bool visible)
+    {
+        if (_ui != null) _ui.SetVisible(visible);
+        if (_hud != null) _hud.SetVisible(visible);
+    }
+
+    /// <summary>같은 씬에 놓인 HUD 프리팹 인스턴스 (비활성 포함). 없으면 null → 플레이스홀더 UI.</summary>
+    MapEditorHud FindHudInScene()
+    {
+        foreach (var h in FindObjectsByType<MapEditorHud>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (h.gameObject.scene == gameObject.scene) return h;
+        return null;
     }
 
     // ------------------------------------------------------------------ input
@@ -424,7 +452,7 @@ public class MapEditorController : MonoBehaviour
         _view.SetGoalMarkerVisible(false);
         _eraserCursor.gameObject.SetActive(false);
         _preview.positionCount = 0;
-        if (_ui != null) _ui.SetVisible(false);
+        SetUiVisible(false);
 
         _session = PlaySession.Begin(Map.Clone(), "검증 플레이", transform);
         _session.Completed += OnVerificationCompleted;
@@ -450,7 +478,7 @@ public class MapEditorController : MonoBehaviour
         _strokesRoot.gameObject.SetActive(true);
         _view.SetGoalMarkerVisible(true);
         _view.SetGoal(Map);
-        if (_ui != null) _ui.SetVisible(true);
+        SetUiVisible(true);
         _pressedLastFrame = true;   // 복귀 클릭이 곧바로 펜 입력으로 새지 않게
 
         if (IsVerified) SetStatus($"검증 성공 — 클리어 {VerifiedParTime:0.00}초 (패타임). [완료]로 확정할 수 있습니다. 맵을 수정하면 재검증이 필요합니다.");

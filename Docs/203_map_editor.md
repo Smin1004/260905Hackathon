@@ -115,15 +115,20 @@ interface ILoadableMap {
 
 | 파일 | 역할 |
 |---|---|
-| `Scenes/MapEditor.unity` | 에디터 씬 — Main Camera + `MapEditor` 오브젝트(`MapEditorController`) 2개뿐. UI·캔버스·이벤트시스템은 런타임 생성 |
+| `Scenes/MapEditor.unity` | 에디터 씬 — Main Camera + `MapEditor` 오브젝트(`MapEditorController`) + **`MapEditorHud` 프리팹 인스턴스**. 캔버스 시각·이벤트시스템은 런타임 생성 |
 | `Scripts/MapEditor/MapEditorController.cs` | 도구 상태·입력(신 Input System `Pointer.current`)·실행취소·완료. 모든 조작이 public 메서드(`BeginStroke/AddPoint/EndStroke`, `EraseAt`, `SetGoal`, `Undo`, `ClearAll`, `Complete`)로 노출되어 UI·테스트가 같은 경로 |
-| `Scripts/MapEditor/MapEditorUI.cs` | 런타임 UI (플레이스홀더 — 공용 UI 킷 확정 후 프리팹 교체) |
+| `Prefabs/UI/MapEditorHud.prefab` + `Scripts/MapEditor/MapEditorHud.cs` | **에디터 HUD** (2026-09-06, 시안 기준). 상단: 라운드 배지·안내문(도구/상태별 문구)·남은 시간 링. 오른쪽: 펜/지우개/실행취소/전체지우기/골 배치. 하단: 굵기 3단·색상 팔레트(StrokePalette 항목 수만큼 생성)·상태 칩·[검증하기]·[완료]. BackCanvas(Screen Space Camera, 정렬 -100)가 배경 도트와 종이 프레임을 스트로크 뒤에 그리고, `PaperSlot` 영역을 뷰포트로 바꿔 카메라를 맞춘 뒤 맵 사각형을 투영해 종이 프레임을 덮는다 → 해상도 무관하게 UI 와 맵이 일치. 컨트롤러는 같은 씬에 HUD 가 있으면 Bind, 없으면 아래 플레이스홀더 |
+| `Scripts/MapEditor/HudToolButton.cs` | 선택/비활성 상태별 배경 스프라이트·아이콘 색 교체 버튼 (프리팹 참조만 채움) |
+| `Scripts/MapEditor/MapEditorTheme.cs` → `UI/MapEditorTheme.asset` | 에디터 화면 테마 SO (색상 + 캔버스 마커·도트 타일 스프라이트). CanvasView 와 HUD 가 공유 — Docs/201 5장 |
+| `Scripts/MapEditor/MapEditorHudBuilder.cs` | 에디터 전용(`#if UNITY_EDITOR`) 프리팹 생성기. 메뉴 **[Chojiilgwan > Build MapEditor HUD]** = `Assets/image` 스프라이트 임포트 설정(Single·9-slice 보더·타일 Repeat) → 테마 에셋 → 프리팹 덮어쓰기 → MapEditor 씬 배치. 레이아웃 수치는 이 파일에 있음 (프리팹을 인스펙터에서 고친 뒤 재실행하면 덮어써짐) |
+| `Assets/image/` | HUD 이미지 에셋 52장 (패널·버튼 상태·아이콘·마커·타이머 링·타일·툴팁). `ref_` 접두사 3장은 글자가 구워진 참고용 — 씬에 쓰지 않는다 |
+| `Scripts/MapEditor/MapEditorUI.cs` | 런타임 UI (플레이스홀더 — HUD 프리팹이 씬에 없을 때만 사용) |
 | `Scripts/MapEditor/StrokeGeometry.cs` | 양자화, RDP 단순화, 점 상한 강제, 원으로 잘라내기(지우개) — 순수 함수 |
 | `Scripts/MapEditor/StrokeVisual.cs` | 스트로크 → LineRenderer(+EdgeCollider2D). 에디터와 Play가 같은 코드 사용 |
 | `Scripts/MapEditor/MapLoader.cs` | `ILoadableMap` 구현 + `GoalZone` — Play 씬 납품 컴포넌트 |
 | `Scripts/MapEditor/CanvasView.cs` | 배경·격자·경계·시작점·골 마커, 카메라 맞춤 (상·하단 UI 바 비율을 빼고 남은 영역에 캔버스를 맞춰 UI 가 드로잉 영역을 가리지 않음) |
 
-미구현: 그리기 타이머(방 설정 연동), 제출 후 대기 오버레이, 검증 시 상대 뜻 적용(뜻 시스템 자체가 미구현).
+미구현: 그리기 타이머 **만료 처리**(HUD 는 `DrawTimeLimit` 카운트다운을 표시만 하고, 만료 시 "골 배치만 허용" 전환은 없음), 제출 후 대기 오버레이(에셋 `panel_card_overlay`·`chip_*` 준비됨), 다시실행 버튼(단축키 Ctrl+Y 만), 지우개 아이콘 에셋(기본 스프라이트 임시), 검증 시 상대 뜻 적용(뜻 시스템 자체가 미구현). HUD 라운드 배지의 "1 / 3" 총 라운드 수는 표시용 인스펙터 값(⚠ 확인 필요 — 라운드 수 규칙 미확정).
 
 ---
 **관련 문서**: `202_gameplay.md` · `205_network.md` · `101_extra_design.md` · `201_common.md` · `100_game_design.md`

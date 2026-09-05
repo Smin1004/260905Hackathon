@@ -40,6 +40,8 @@ public class NetService : MonoBehaviour
     const string MsgMapMeta = "CJ_MapMeta";
     const string MsgMapChunk = "CJ_MapChunk";
     const string MsgPlayResult = "CJ_PlayResult";
+    const string MsgNextRound = "CJ_NextRound";
+    const float LeaveTimeoutSeconds = 4f;
     const int MaxPlayers = 2;
     const float NetcodeStartTimeout = 20f;
 
@@ -65,6 +67,8 @@ public class NetService : MonoBehaviour
     /// <summary>(상대 맵, 상대 맵의 패타임)</summary>
     public event Action<MapData, float> MapReceived;
     public event Action<PlayerRecord> ResultReceived;
+    /// <summary>상대가 [다음 라운드] 준비 완료</summary>
+    public event Action NextRoundReceived;
     /// <summary>사유 문구. 한 매치에 1회만 발생</summary>
     public event Action<string> MatchAborted;
 
@@ -157,12 +161,46 @@ public class NetService : MonoBehaviour
         if (s != null)
         {
             UnhookSession(s);
-            try { await s.LeaveAsync(); } catch (Exception e) { Debug.LogException(e); }
+            try
+            {
+                // 상대가 먼저 나가 NGO 가 이미 멈춘 경우 SDK 의 LeaveAsync 가 정지 콜백을 기다리며 끝나지 않을 수 있다 → 타임아웃
+                var leaveTask = s.LeaveAsync();
+                var finished = await Task.WhenAny(leaveTask, Task.Delay(TimeSpan.FromSeconds(LeaveTimeoutSeconds)));
+                if (finished != leaveTask) Debug.LogWarning("[NetService] LeaveAsync 타임아웃 — 로컬 정리만 진행");
+                else if (leaveTask.IsFaulted) Debug.LogException(leaveTask.Exception);
+            }
+            catch (Exception e) { Debug.LogException(e); }
         }
         var nm = NetworkManager.Singleton;
         if (nm != null && nm.IsListening) nm.Shutdown();
         ResetMatchState();
         SetStatus("세션을 나갔습니다.");
+    }
+
+    /// <summary>
+    /// 상대가 나간 뒤 같은 방(코드 유지)에서 새 상대를 기다린다 — 호스트 전용. NGO 호스트가 살아 있어야 한다.
+    /// </summary>
+    public bool PrepareForNewOpponent()
+    {
+        var nm = NetworkManager.Singleton;
+        if (_session == null || !_session.IsHost || nm == null || !nm.IsListening) return false;
+        _peerClientId = ulong.MaxValue;
+        _helloReceived = false;
+        if (_helloLoop != null) { StopCoroutine(_helloLoop); _helloLoop = null; }
+        _aborted = false;
+        IsOpponentReady = false;
+        OpponentNickname = "";
+        _assembler.Reset();
+        SetStatus($"방 코드 {_session.Code} — 새 상대를 기다립니다");
+        return true;
+    }
+
+    /// <summary>같은 방에서 다음 라운드 시작 준비 — 매치 진행 플래그만 초기화 (세션·연결·상대 정보 유지).</summary>
+    public void ResetForNextRound()
+    {
+        _assembler.Reset();
+        _incomingParTime = 0f;
+        _incomingChunkCount = 0;
     }
 
     static string ClampNick(string nick, string fallback)
@@ -242,6 +280,7 @@ public class NetService : MonoBehaviour
         cmm.RegisterNamedMessageHandler(MsgMapMeta, OnMapMeta);
         cmm.RegisterNamedMessageHandler(MsgMapChunk, OnMapChunk);
         cmm.RegisterNamedMessageHandler(MsgPlayResult, OnPlayResult);
+        cmm.RegisterNamedMessageHandler(MsgNextRound, OnNextRound);
 
         UnhookNetcode();
         _onConnected = OnClientConnected;
@@ -405,6 +444,24 @@ public class NetService : MonoBehaviour
             w.WriteValueSafe(r.GaveUp);
             Send(MsgPlayResult, w, NetworkDelivery.ReliableSequenced);
         }
+    }
+
+    public void SendNextRound()
+    {
+        if (!CanSend()) { Debug.LogWarning("[NetService] SendNextRound: 상대와 연결되지 않음"); return; }
+        var w = new FastBufferWriter(16, Allocator.Temp, 64);
+        using (w)
+        {
+            w.WriteValueSafe(1);
+            Send(MsgNextRound, w, NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    void OnNextRound(ulong sender, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out int _);
+        SetStatus("상대가 다음 라운드를 준비했습니다");
+        NextRoundReceived?.Invoke();
     }
 
     bool CanSend()
