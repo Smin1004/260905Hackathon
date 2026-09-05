@@ -37,6 +37,10 @@ public class PlaySession : MonoBehaviour
     Canvas _hud;
     Text _hudText, _resultText;
     bool _ending;
+    bool _respawning;
+
+    /// <summary>사망 후 시작점에 나타나기까지의 정지 시간 — 어디서 죽었는지 인지할 여유 (조작 구성 확정값)</summary>
+    public float RespawnDelay = 0.2f;
 
     const float FallY = -3f;
     const float FallMargin = 3f;
@@ -87,9 +91,26 @@ public class PlaySession : MonoBehaviour
 
     public void Respawn(bool countsAsAttempt)
     {
-        if (IsFinished) return;
-        Player.Respawn(Map.StartPos);
+        if (IsFinished || _respawning) return;
         if (countsAsAttempt) Attempts++;
+        StartCoroutine(RespawnRoutine());
+    }
+
+    /// <summary>사망 연출: 그 자리에 잠깐 멈춤(타이머는 계속 흐름) → 시작점 복귀.</summary>
+    System.Collections.IEnumerator RespawnRoutine()
+    {
+        _respawning = true;
+        Player.Freeze();
+        Player.Body.simulated = false;
+        Player.PlayDeathFeedback();
+        yield return new WaitForSeconds(RespawnDelay);
+        if (Player != null)
+        {
+            Player.Respawn(Map.StartPos);
+            Player.Body.simulated = true;
+            if (!IsFinished) Player.Unfreeze();
+        }
+        _respawning = false;
     }
 
     void OnGoalReached(Collider2D other)
@@ -148,7 +169,7 @@ public class PlaySession : MonoBehaviour
     void UpdateHud()
     {
         if (_hudText == null) return;
-        _hudText.text = $"{Title}   ⏱ {Elapsed:0.0}s   시도 {Attempts}   |   이동 A/D · ←/→    점프 W · ↑    R 리스폰    ESC 에디터로" +
+        _hudText.text = $"{Title}   ⏱ {Elapsed:0.0}s   시도 {Attempts}   |   이동 A/D·←/→   점프 W·↑ (길게 누르면 높이)   빠른 낙하 S·↓   R 리스폰   ESC 에디터로" +
                         (IsFinished ? "   |   클리어 — 잠시 후 에디터로 돌아갑니다" : "");
     }
 }

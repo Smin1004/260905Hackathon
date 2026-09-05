@@ -78,6 +78,7 @@ public class MapEditorController : MonoBehaviour
 
     void Awake()
     {
+        Application.runInBackground = true;   // 창 포커스를 잃어도 플레이(검증·타이머)가 멈추지 않게 — 멀티 대기 중에도 필요
         if (palette == null) palette = StrokePalette.LoadOrDefault();
         if (targetCamera == null) targetCamera = Camera.main;
         if (targetCamera == null)
