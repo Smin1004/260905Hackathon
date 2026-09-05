@@ -58,15 +58,34 @@ public class CanvasView : MonoBehaviour
         _goalMarker.gameObject.SetActive(false);
     }
 
-    /// <summary>테마 버전: 종이색 + 도트 타일 배경, 바닥·왼쪽 벽, 스프라이트 시작/골 마커(펄스 포함), START 라벨.</summary>
-    void BuildThemed(MapEditorTheme t, float w, float h)
+    /// <summary>
+    /// 교환 플레이(Play 씬)용 배경: 종이 + 도트 타일 + 시작 마커만 (경계·골은 세션의 MapLoader 가 그린다).
+    /// 상대 맵을 플레이할 때 배경이 검어 선이 안 보이던 문제 — 에디터·검증과 같은 종이 위에서 플레이한다.
+    /// theme 이 없으면 단색 종이만 깐다.
+    /// </summary>
+    public static Transform BuildPlayBackdrop(Transform parent, MapEditorTheme theme)
     {
-        // 종이 (단색) + 도트 타일 (Tiled 스프라이트 — PPU 가 도트 간격을 정한다)
-        RuntimeSprites.MakeSquare("Paper", _root, new Vector2(w / 2f, h / 2f), new Vector2(w, h), t.Paper, -20);
+        var root = new GameObject("Play Backdrop").transform;
+        root.SetParent(parent, false);
+        float w = MapConstants.CanvasWidth, h = MapConstants.CanvasHeight;
+        if (theme == null)
+        {
+            RuntimeSprites.MakeSquare("Paper", root, new Vector2(w / 2f, h / 2f), new Vector2(w, h), new Color(0.96f, 0.96f, 0.94f), -20);
+            return root;
+        }
+        BuildPaper(root, theme, w, h);
+        BuildStartMarker(root, theme);
+        return root;
+    }
+
+    /// <summary>종이 (단색) + 도트 타일 (Tiled 스프라이트 — PPU 가 도트 간격을 정한다)</summary>
+    static void BuildPaper(Transform root, MapEditorTheme t, float w, float h)
+    {
+        RuntimeSprites.MakeSquare("Paper", root, new Vector2(w / 2f, h / 2f), new Vector2(w, h), t.Paper, -20);
         if (t.PaperDotsTile != null)
         {
             var dots = new GameObject("Paper Dots");
-            dots.transform.SetParent(_root, false);
+            dots.transform.SetParent(root, false);
             dots.transform.position = new Vector3(w / 2f, h / 2f, 0f);
             var sr = dots.AddComponent<SpriteRenderer>();
             sr.sprite = t.PaperDotsTile;
@@ -76,15 +95,34 @@ public class CanvasView : MonoBehaviour
             sr.color = t.PaperDots;
             sr.sortingOrder = -19;
         }
+    }
+
+    /// <summary>테마 버전: 종이색 + 도트 타일 배경, 바닥·왼쪽 벽, 스프라이트 시작/골 마커(펄스 포함), START 라벨.</summary>
+    void BuildThemed(MapEditorTheme t, float w, float h)
+    {
+        BuildPaper(_root, t, w, h);
 
         // 바닥·왼쪽 벽 (Play 의 MapLoader 와 같은 굵기·색, 단 종이 밖으로 나가지 않게 캔버스 범위로 자른다 — 콜라이더 없음)
         float cap = t.BoundaryWidth * 0.5f;   // 라운드 캡이 종이 밖으로 나가지 않게 끝점을 캡 반지름만큼 안쪽으로
         Line(_root, new Vector2(cap, 0f), new Vector2(w - cap, 0f), t.BoundaryWidth, t.BoundaryColor, -5);
         Line(_root, new Vector2(0f, cap), new Vector2(0f, h - cap), t.BoundaryWidth, t.BoundaryColor, -5);
 
-        // 시작점: 펄스 + 마커 + START 라벨
+        BuildStartMarker(_root, t);
+
+        // 골: 펄스 + 마커 (배치 전 숨김)
+        var goalRoot = new GameObject("Goal Marker").transform;
+        goalRoot.SetParent(_root, false);
+        Marker(goalRoot, t.GoalPulse, t.PulseSize, 3);
+        Marker(goalRoot, t.GoalMarker, t.MarkerSize, 4);
+        _goalMarker = goalRoot;
+        _goalMarker.gameObject.SetActive(false);
+    }
+
+    /// <summary>시작점: 펄스 + 마커 + START 라벨</summary>
+    static void BuildStartMarker(Transform root, MapEditorTheme t)
+    {
         var startRoot = new GameObject("Start Marker").transform;
-        startRoot.SetParent(_root, false);
+        startRoot.SetParent(root, false);
         startRoot.position = new Vector3(MapConstants.StartPos.x, MapConstants.StartPos.y, 0f);
         Marker(startRoot, t.StartPulse, t.PulseSize, 3);
         Marker(startRoot, t.StartMarker, t.MarkerSize, 4);
@@ -102,14 +140,6 @@ public class CanvasView : MonoBehaviour
         var tmr = label.GetComponent<MeshRenderer>();
         tmr.sortingOrder = 4;
         tmr.sharedMaterial = RuntimeUI.Font.material;
-
-        // 골: 펄스 + 마커 (배치 전 숨김)
-        var goalRoot = new GameObject("Goal Marker").transform;
-        goalRoot.SetParent(_root, false);
-        Marker(goalRoot, t.GoalPulse, t.PulseSize, 3);
-        Marker(goalRoot, t.GoalMarker, t.MarkerSize, 4);
-        _goalMarker = goalRoot;
-        _goalMarker.gameObject.SetActive(false);
     }
 
     static void Marker(Transform parent, Sprite sprite, float diameter, int order)

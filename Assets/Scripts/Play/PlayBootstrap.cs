@@ -36,6 +36,7 @@ public class PlayBootstrap : MonoBehaviour
         PlayHud.Theme.Load();
         cam.backgroundColor = PlayHud.Theme.Background;   // 에디터 HUD 와 같은 배경색 (MapEditorTheme.Background)
         CanvasView.FitCamera(cam, 0.14f, 0.06f);   // 상단 HUD 바(183px)·하단 조작 안내를 비워 둔다
+        CanvasView.BuildPlayBackdrop(transform, MapEditorTheme.LoadOrNull());   // (QA) 에디터와 같은 종이 배경 — 검은 배경에서 선이 안 보이던 문제
     }
 
     void Start()
