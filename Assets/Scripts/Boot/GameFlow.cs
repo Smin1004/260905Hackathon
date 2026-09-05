@@ -825,7 +825,7 @@ public class GameFlow : MonoBehaviour
         // ---- 로비
         _lobbyPanel = RuntimeUI.Panel(root, Vector2.zero, Vector2.one, new Color(0.10f, 0.11f, 0.14f)).gameObject;
         var lp = _lobbyPanel.transform;
-        RuntimeUI.Label(lp, new Vector2(0f, 0.80f), new Vector2(1f, 0.94f), "초지일관", 84, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+        RuntimeUI.Label(lp, new Vector2(0f, 0.80f), new Vector2(1f, 0.94f), "뜻밖의난관", 84, TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
         RuntimeUI.Label(lp, new Vector2(0f, 0.74f), new Vector2(1f, 0.80f), "스스로 걸은 뜻을 지킨 채, 상대가 그린 맵을 클리어하라", 24, TextAnchor.MiddleCenter, new Color(0.8f, 0.8f, 0.85f));
 
         // 카드 (방 화면의 패널과 같은 색) — 닉네임(필수) → 방 만들기 → 코드 참가
@@ -835,7 +835,6 @@ public class GameFlow : MonoBehaviour
         _nickInput = RuntimeUI.Input(card, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.85f), "닉네임 (최대 12자)");
         _nickInput.characterLimit = 12;
         _nickInput.onValueChanged.AddListener(_ => RefreshLobbyButtons());
-        WebPrompt.Attach(_nickInput, "닉네임을 입력하세요 (최대 12자)");   // WebGL: InputField 가 한글 IME 를 못 받아 브라우저 prompt 로 대신
 
         _createBtn = RuntimeUI.Button(card, new Vector2(0.08f, 0.50f), new Vector2(0.92f, 0.64f), "방 만들기", CreateRoom, new Color(0.25f, 0.55f, 0.95f), 30);
 

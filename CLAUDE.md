@@ -1,4 +1,4 @@
-# 초지일관 (가칭) — 해커톤 프로젝트
+# 뜻밖의난관 — 해커톤 프로젝트 (주제어: 초지일관)
 
 Unity 6 (6000.0.66f2), 2D URP, 신 Input System, Unity Multiplayer Services + Netcode for GameObjects.
 

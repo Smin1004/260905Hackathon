@@ -1,6 +1,6 @@
 # 프로젝트 문서 폴더 안내
 
-해커톤 출품작 「초지일관」(가칭) 개발 문서 모음.
+해커톤 출품작 「뜻밖의난관」(구 가칭 초지일관) 개발 문서 모음.
 
 - **목적**: 팀원 간 기획 공유 + 각 개발자의 AI(코딩 에이전트)가 프로젝트를 파악할 수 있게 하는 것
 - **원칙**: 문서에 근거 없는 코드 작성 금지. 구현 전 해당 분야 문서를 반드시 읽을 것
@@ -52,6 +52,7 @@
 
 | 날짜 | 변경 |
 |---|---|
+| 2026-09-06 | **제목 확정 「뜻밖의난관」** (홈 화면·productName·CLAUDE.md·README·SUMMARY). WebGL 닉네임 입력의 브라우저 prompt 방식 폐기 → 키보드 직접 입력 (`WebPrompt.cs` 삭제, 204 2.1) |
 | 2026-09-06 | **공통 룩** (204 3장): 모든 화면 배경 네이비 + 도트(`RuntimeUI.Backdrop/BackdropCanvas`, 테마 `BgDotsTile`), 모든 상자 둥근 모서리(`RuntimeUI.RoundedRect` — 패널 24/버튼 16/입력 12px), 골 존을 시작 마커와 같은 원형(테마 GoalPulse+GoalMarker, `CircleCollider2D`)으로, 썸네일 시작·골도 원. `MapEditorTheme.asset` → `Resources/UI/` (빌드에서도 마커·배경 로드) |
 | 2026-09-06 | **노랑·하늘 = 컨베이어** (101 1장): 노랑 → 오른쪽 3u/s, 하늘 ← 왼쪽 3u/s — `SurfaceModifier.ConveyorSpeed`, `PlayerController` 지상 이동에 접선 가산, `MapLoader.ColorBehaviours.ConveyorSpeed`. 스와치 라벨 갱신. 하늘색 은폐 구역 안은 폐기 |
 | 2026-09-06 | **뜻 6종 추가 + 조합 금지** (100 4.1, 202 2장): 과속·쉬지 않는 발·고무공·달 걷기·튕기는 몸·투명 인간 (`VowId` 9~14, `PlayerController` 손잡이 `AutoRun`/`AlwaysBounceFactor`/`WallBounceSpeed`/`Translucent`). `VowDef.Conflicts`(저속↔과속, 고중력↔달 걷기): 후보 뽑기는 충돌 없는 조합, 선택 UI 는 충돌 카드 어둡게 + 안내, 확정 시 `IsValidSet`, AutoPilot 은 `PickCompatible` |
