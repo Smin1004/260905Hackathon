@@ -709,6 +709,9 @@ public class NetService : MonoBehaviour
         var go = new GameObject("NetworkManager (runtime)");
         var nm = go.AddComponent<NetworkManager>();
         var transport = go.AddComponent<UnityTransport>();
+#if UNITY_WEBGL && !UNITY_EDITOR
+        transport.UseWebSockets = true;   // 브라우저는 UDP 불가 — Relay WSS (SDK 가 WebGL 에서 자동으로 wss 할당을 고른다)
+#endif
         nm.NetworkConfig = new NetworkConfig
         {
             NetworkTransport = transport,

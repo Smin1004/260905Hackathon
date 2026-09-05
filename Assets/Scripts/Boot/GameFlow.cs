@@ -999,8 +999,8 @@ public class GameFlow : MonoBehaviour
     {
         var code = _net != null ? _net.RoomCode : null;
         if (string.IsNullOrEmpty(code)) return;
-        GUIUtility.systemCopyBuffer = code;
-        SetRoomStatus($"방 코드 {code} 를 복사했습니다.");
+        bool ok = Clipboard.Copy(code);   // WebGL 포함 (Scripts/Common/Clipboard.cs)
+        SetRoomStatus(ok ? $"방 코드 {code} 를 복사했습니다." : $"복사에 실패했습니다. 코드를 직접 알려주세요: {code}");
     }
 
     /// <summary>방 화면의 코드·플레이어·설정·버튼 상태를 현재 데이터로 다시 그린다.</summary>

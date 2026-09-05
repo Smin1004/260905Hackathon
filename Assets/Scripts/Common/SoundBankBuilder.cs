@@ -36,8 +36,8 @@ public static class SoundBankBuilder
         bank.Eraser = Find("sfx_eraser");
         bank.Clock = Find("sfx_clock");
 
-        // 배경음·루프는 스트리밍/압축, 짧은 효과음은 메모리 디코드
-        foreach (var name in new[] { "bgm_lobby_edit", "bgm_battle" }) SetImport(name, AudioClipLoadType.Streaming);
+        // 배경음·루프는 압축 상태로 메모리에(WebGL 은 Streaming 미지원), 짧은 효과음은 메모리 디코드
+        foreach (var name in new[] { "bgm_lobby_edit", "bgm_battle" }) SetImport(name, AudioClipLoadType.CompressedInMemory);
         foreach (var name in new[] { "sfx_drawing", "sfx_eraser", "sfx_clock" }) SetImport(name, AudioClipLoadType.CompressedInMemory);
         foreach (var name in new[] { "sfx_click", "sfx_jump", "sfx_land", "sfx_confirm" }) SetImport(name, AudioClipLoadType.DecompressOnLoad);
 
@@ -79,7 +79,7 @@ public static class SoundBankBuilder
         s.quality = 0.7f;
         imp.defaultSampleSettings = s;
         imp.forceToMono = false;
-        imp.loadInBackground = loadType == AudioClipLoadType.Streaming;
+        imp.loadInBackground = false;
         if (changed) imp.SaveAndReimport();
     }
 }
