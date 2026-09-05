@@ -709,8 +709,10 @@ public class NetService : MonoBehaviour
         var go = new GameObject("NetworkManager (runtime)");
         var nm = go.AddComponent<NetworkManager>();
         var transport = go.AddComponent<UnityTransport>();
-#if UNITY_WEBGL && !UNITY_EDITOR
-        transport.UseWebSockets = true;   // 브라우저는 UDP 불가 — Relay WSS (SDK 가 WebGL 에서 자동으로 wss 할당을 고른다)
+#if UNITY_WEBGL
+        // 브라우저는 UDP 불가 — Relay WSS. SDK 는 UNITY_WEBGL 이 정의되면(에디터에서 빌드 타깃이 WebGL 일 때도!) wss 할당을 고르므로
+        // 에디터 포함으로 켠다. 안 켜면 "Mismatched Relay configuration and network interface" 로 방 생성이 실패한다.
+        transport.UseWebSockets = true;
 #endif
         nm.NetworkConfig = new NetworkConfig
         {

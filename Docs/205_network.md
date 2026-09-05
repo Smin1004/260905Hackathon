@@ -36,7 +36,7 @@
 
 - 메뉴 **[Chojiilgwan > WebGL > Build]** → `Builds/WebGL/` (gitignore). 설정만 적용하려면 [Chojiilgwan > WebGL > Apply Settings] (`Scripts/Common/WebBuild.cs`)
 - 플레이어 설정: 압축 **Gzip + 압축 해제 폴백**(서버 헤더 없이 정적 호스팅 어디서나 실행), 코드 스트리핑 **Low**(Services·Netcode 리플렉션 보호), IL2CPP Release·OptimizeSize, 예외 지원 ExplicitlyThrownExceptionsOnly, 기본 캔버스 1280×720, runInBackground
-- 네트워크: 브라우저는 UDP 를 못 쓰므로 Relay **WSS**. Multiplayer Services SDK 가 WebGL 에서 자동으로 wss 할당을 고르고(`RelayProtocol.Default = WSS`), UnityTransport 는 `RelayServerData.IsWebSocket` 을 보고 웹소켓으로 붙는다. `NetService.EnsureNetworkManager` 가 WebGL 에서 `UseWebSockets = true` 를 추가로 켠다. 데스크톱 빌드·에디터(DTLS)와 WebGL(WSS)이 **같은 방에 섞여도 됨** — Relay 가 중계
+- 네트워크: 브라우저는 UDP 를 못 쓰므로 Relay **WSS**. Multiplayer Services SDK 가 WebGL 에서 자동으로 wss 할당을 고르고(`RelayProtocol.Default = WSS`), UnityTransport 는 `RelayServerData.IsWebSocket` 을 보고 웹소켓으로 붙는다. `NetService.EnsureNetworkManager` 가 `UNITY_WEBGL` 이 정의될 때 `UseWebSockets = true` 를 켠다 — **에디터에서 빌드 타깃이 WebGL 이면 에디터 플레이도 wss** 로 붙는다(SDK 가 같은 심볼로 wss 할당을 고르므로 안 켜면 "Mismatched Relay configuration" 으로 방 생성 실패). 에디터 콘솔의 "Could not do Qos region selection" 은 WebGL 에서 QoS 미지원 경고일 뿐 정상 동작. 데스크톱 빌드·에디터(DTLS)와 WebGL(WSS)이 **같은 방에 섞여도 됨** — Relay 가 중계
 - 실행: `file://` 로는 열리지 않는다. 로컬 확인은 `Builds/WebGL` 에서 `python -m http.server 8000` 뒤 `http://localhost:8000`. 배포는 itch.io(HTML 프로젝트, 압축 zip 업로드) 또는 GitHub Pages
 - WebGL 차이점: 명령행 인자가 없어 `AutoPilot` 미동작(자동화는 데스크톱 빌드로), 클립보드는 `Plugins/WebGL/Clipboard.jslib`(`Scripts/Common/Clipboard.cs`) 경유, AudioClip Streaming 미지원(SoundBank 는 CompressedInMemory), 첫 로딩 수십 초(약 30~40MB 다운로드), 브라우저 탭이 비활성이면 프레임이 느려질 수 있음(runInBackground 로 타이머는 유지)
 - ⚠ 확인 필요: 실기기 브라우저 2대(또는 브라우저 + 데스크톱 빌드)로 방 생성·참가·맵 교환까지 한 번 통과시킬 것. Relay WSS 는 방화벽/프록시 환경에서 443 포트를 쓰므로 회사 네트워크에서도 대체로 열려 있다
